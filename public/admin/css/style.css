@@ -1,0 +1,63 @@
+/* Munchies 风格：混搭精致衬线体与现代无衬线体 */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;600&display=swap');
+
+body { 
+    font-family: 'Inter', sans-serif;
+    background-color: #ffffff;
+    color: #1a1a1a;
+}
+
+h1, h2, h3, .serif {
+    font-family: 'DM Serif Display', serif;
+}
+
+/* Munchies 特有的软阴影 */
+.munchies-card {
+    border-radius: 24px;
+    background: #ffffff;
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.munchies-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1);
+}
+
+/* 强调文字的下划线效果 */
+.highlight {
+    position: relative;
+    z-index: 1;
+}
+.highlight::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: 4px;
+    width: 100%;
+    height: 8px;
+    background: #fdf2f2; /* 淡淡的肉粉色，Munchies 常用色 */
+    z-index: -1;
+}
+
+.btn-munchies {
+    /* Tailwind @apply cannot be used directly in vanilla CSS without build step. 
+       Replacing @apply with actual CSS properties. */
+    padding-left: 2rem; /* px-8 */
+    padding-right: 2rem; /* px-8 */
+    padding-top: 0.75rem; /* py-3 */
+    padding-bottom: 0.75rem; /* py-3 */
+    border-radius: 9999px; /* rounded-full */
+    font-weight: 600; /* font-semibold */
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 300ms;
+    
+    background-color: #1a1a1a;
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+}
+.btn-munchies:hover {
+    background-color: #333333;
+    transform: scale(1.02);
+}

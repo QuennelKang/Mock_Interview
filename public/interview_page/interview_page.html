@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mock Interview | Munchies 风格</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* 保持原有的功能性 CSS，但适配新风格 */
+        body, html {
+            height: 100%;
+            overflow: hidden;
+            background-color: #f9fafb; /* gray-50 */
+        }
+
+        /* 视频镜像翻转 */
+        .mirrored { transform: scaleX(-1); }
+
+        /* 视频容器样式覆盖 */
+        .video-card-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 24px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            border: 1px solid #f3f4f6;
+            transition: all 0.3s ease;
+        }
+        
+        #localVideo {
+            width: 100%; height: 100%; object-fit: cover;
+            position: absolute; inset: 0; z-index: 10; display: none;
+            border-radius: 24px;
+        }
+
+        /* 头像替代 */
+        .avatar-placeholder {
+            width: 100%; height: 100%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 4rem;
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            color: #9ca3af;
+        }
+
+        /* 聊天区域动画 */
+        .message {
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 录制闪烁 */
+        .rec-blink { color: #ef4444; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0; } }
+
+        /* 自定义滚动条 */
+        .chat-scroll::-webkit-scrollbar { width: 6px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background-color: #e5e7eb; border-radius: 20px; }
+
+        /* 按钮激活/危险状态适配 Tailwind 类 */
+        .btn-control {
+            @apply flex items-center justify-center gap-2 px-6 py-3 rounded-full font-medium transition-all duration-200 border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300;
+        }
+        /* 由于不能直接写 @apply，我们在 HTML class 中使用 Tailwind，这里仅作状态补充 */
+        .btn-control.active {
+            background-color: #1a1a1a;
+            color: white;
+            border-color: #1a1a1a;
+        }
+        .btn-control.danger {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border-color: #fecaca;
+        }
+        .btn-control.danger:hover {
+            background-color: #fecaca;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-full text-gray-800 font-sans">
+
+    <!-- 顶部导航栏 -->
+    <header class="h-16 bg-white border-b border-gray-100 flex justify-between items-center px-8 shrink-0 z-20">
+        <div class="flex items-center gap-4">
+            <div class="text-xl font-bold tracking-tighter serif">Mock<span class="text-gray-400">.</span>Munchies</div>
+            <div class="h-4 w-px bg-gray-200"></div>
+            <div id="m-timer" class="text-sm font-medium text-gray-500 font-mono">会议: 00:00</div>
+        </div>
+        
+        <div class="flex items-center gap-6">
+            <div id="rec-status" class="hidden px-3 py-1 bg-red-50 border border-red-100 rounded-full text-xs font-medium">
+                <span class="rec-blink">● 录制中</span> <span id="r-timer" class="ml-2 font-mono text-red-600">00:00</span>
+            </div>
+            <div id="clock" class="text-sm font-medium text-gray-400 font-mono">--:--:--</div>
+        </div>
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- 视频网格区域 -->
+        <div class="flex-1 p-6 bg-gray-50 overflow-y-auto">
+            <div class="grid grid-cols-2 grid-rows-2 gap-6 h-full max-w-6xl mx-auto">
+                
+                <!-- 本地视频卡片 -->
+                <div class="video-card-container relative group">
+                    <!-- 状态指示器 -->
+                    <div class="absolute top-4 right-4 z-20 flex gap-2">
+                        <span id="led-mic" class="w-8 h-8 rounded-full bg-white/80 backdrop-blur shadow-sm flex items-center justify-center text-gray-400 text-xs transition-colors">
+                            🎤
+                        </span>
+                        <span id="led-cam" class="w-8 h-8 rounded-full bg-white/80 backdrop-blur shadow-sm flex items-center justify-center text-gray-400 text-xs transition-colors">
+                            📷
+                        </span>
+                    </div>
+                    
+                    <video id="localVideo" autoplay playsinline muted></video>
+                    
+                    <div class="avatar-placeholder" id="localAvatar">
+                        <span class="text-4xl">🙋‍♂️</span>
+                    </div>
+                    
+                    <div class="absolute bottom-4 left-4 z-20 px-3 py-1 bg-black/50 backdrop-blur rounded-lg text-white text-xs font-medium">
+                        你 (Candidate)
+                    </div>
+                </div>
+
+                <!-- 其他参与者 (模拟) -->
+                <div class="video-card-container flex items-center justify-center">
+                    <div class="avatar-placeholder bg-blue-50 text-blue-300"><span class="text-4xl">👨‍💻</span></div>
+                    <div class="absolute bottom-4 left-4 px-3 py-1 bg-white/80 backdrop-blur rounded-lg text-gray-600 text-xs font-medium border border-gray-100 shadow-sm">AI 面试官</div>
+                </div>
+                <div class="video-card-container flex items-center justify-center">
+                    <div class="avatar-placeholder bg-green-50 text-green-300"><span class="text-4xl">👩‍🎨</span></div>
+                    <div class="absolute bottom-4 left-4 px-3 py-1 bg-white/80 backdrop-blur rounded-lg text-gray-600 text-xs font-medium border border-gray-100 shadow-sm">记录员</div>
+                </div>
+                <div class="video-card-container flex items-center justify-center">
+                    <div class="avatar-placeholder bg-purple-50 text-purple-300"><span class="text-4xl">👀</span></div>
+                    <div class="absolute bottom-4 left-4 px-3 py-1 bg-white/80 backdrop-blur rounded-lg text-gray-600 text-xs font-medium border border-gray-100 shadow-sm">观察员</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 聊天/侧边栏区域 -->
+        <aside class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10">
+            <div class="h-16 border-b border-gray-50 flex items-center px-6 gap-3">
+                <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                <span class="font-serif text-lg font-medium">Interview Chat</span>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-6 space-y-6 chat-scroll" id="chatMessages">
+                <div class="message flex gap-4">
+                    <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm shrink-0 mt-1">AI</div>
+                    <div class="bg-gray-100 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed text-gray-700">
+                        你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-50 bg-white">
+                <div class="relative">
+                    <input type="text" id="chatInput" 
+                        class="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5 focus:bg-white transition-all placeholder-gray-400"
+                        placeholder="输入回答..." autocomplete="off">
+                    <button id="btnSend" class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-black text-white rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+    </main>
+
+    <!-- 底部控制栏 -->
+    <footer class="h-20 bg-white border-t border-gray-100 flex justify-center items-center gap-4 px-6 shrink-0 z-20">
+        <button id="btn-mic" onclick="toggleMic()" class="btn-control group">
+            <span class="text-lg">🎤</span>
+            <span class="text-sm">麦克风</span>
+        </button>
+        <button id="btn-cam" onclick="toggleCam()" class="btn-control group">
+            <span class="text-lg">📷</span>
+            <span class="text-sm">摄像头</span>
+        </button>
+        <button id="btn-mirror" onclick="toggleMirror()" class="btn-control group">
+            <span class="text-lg">🪞</span>
+            <span class="text-sm">镜像</span>
+        </button>
+        <div class="w-px h-8 bg-gray-200 mx-2"></div>
+        <button id="btn-rec" onclick="toggleRecord()" class="btn-control group hover:bg-red-50 hover:border-red-100 hover:text-red-600">
+            <span class="text-lg">⏺</span>
+            <span class="text-sm">开始录制</span>
+        </button>
+        <button onclick="location.href='../main_page.html'" class="btn-control text-red-600 hover:bg-red-50 border-transparent">
+            <span class="text-lg">✕</span>
+            <span class="text-sm">结束面试</span>
+        </button>
+    </footer>
+
+<script>
+    // 保持原有的逻辑，仅适配类名操作
+    let stream = null, recorder = null, chunks = [], isRecording = false;
+    let startTime = Date.now(), recStartTime = 0;
+
+    function formatTime(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return String(minutes).padStart(2, '0') + ":" + String(seconds).padStart(2, '0');
+    }
+
+    async function ensureStream() {
+        if (!stream) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                document.getElementById('localVideo').srcObject = stream;
+                stream.getTracks().forEach(t => t.enabled = false);
+            } catch (err) { alert("获取设备失败，请检查权限"); }
+        }
+        return stream;
+    }
+
+    function toggleMirror() {
+        const video = document.getElementById('localVideo');
+        const btn = document.getElementById('btn-mirror');
+        video.classList.toggle('mirrored');
+        const isMirrored = video.classList.contains('mirrored');
+        
+        btn.classList.toggle('active', isMirrored);
+        // 移除 innerHTML 修改，避免覆盖图标
+    }
+
+    async function toggleMic() {
+        const s = await ensureStream();
+        const track = s.getAudioTracks()[0];
+        track.enabled = !track.enabled;
+        
+        const led = document.getElementById('led-mic');
+        const btn = document.getElementById('btn-mic');
+        
+        if (track.enabled) {
+            led.classList.remove('text-gray-400');
+            led.classList.add('text-green-500', 'bg-green-50');
+            btn.classList.add('active');
+            
+            if (recognition) {
+                try { recognition.start(); } catch (e) { console.log(e); }
+            }
+        } else {
+            led.classList.add('text-gray-400');
+            led.classList.remove('text-green-500', 'bg-green-50');
+            btn.classList.remove('active');
+            
+            if (recognition) {
+                try { recognition.stop(); } catch (e) { console.log(e); }
+            }
+        }
+    }
+
+    async function toggleCam() {
+        const s = await ensureStream();
+        const track = s.getVideoTracks()[0];
+        track.enabled = !track.enabled;
+        
+        const video = document.getElementById('localVideo');
+        const avatar = document.getElementById('localAvatar');
+        const led = document.getElementById('led-cam');
+        const btn = document.getElementById('btn-cam');
+
+        video.style.display = track.enabled ? 'block' : 'none';
+        avatar.style.display = track.enabled ? 'none' : 'flex';
+        
+        if (track.enabled) {
+            led.classList.remove('text-gray-400');
+            led.classList.add('text-green-500', 'bg-green-50');
+            btn.classList.add('active');
+        } else {
+            led.classList.add('text-gray-400');
+            led.classList.remove('text-green-500', 'bg-green-50');
+            btn.classList.remove('active');
+        }
+    }
+
+    async function toggleRecord() {
+        const btn = document.getElementById('btn-rec');
+        const recStatus = document.getElementById('rec-status');
+        
+        if (!isRecording) {
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                const micStream = await ensureStream();
+                
+                const audioCtx = new AudioContext();
+                const destination = audioCtx.createMediaStreamDestination();
+                if (screenStream.getAudioTracks().length > 0) audioCtx.createMediaStreamSource(screenStream).connect(destination);
+                if (micStream.getAudioTracks().length > 0) audioCtx.createMediaStreamSource(micStream).connect(destination);
+
+                const combined = new MediaStream([...screenStream.getVideoTracks(), ...destination.stream.getAudioTracks()]);
+                recorder = new MediaRecorder(combined, { mimeType: 'video/webm' });
+                
+                chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const now = new Date();
+                    const fileName = `Interview_${now.getTime()}.webm`;
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = fileName;
+                    a.click();
+                    screenStream.getTracks().forEach(t => t.stop());
+                };
+
+                recorder.start();
+                isRecording = true;
+                recStartTime = Date.now();
+                
+                recStatus.style.display = 'flex'; // Changed to flex for Tailwind alignment
+                btn.innerHTML = '<span class="text-lg">⏹</span><span class="text-sm">停止录制</span>';
+                btn.classList.add('danger');
+            } catch (err) { console.error("录制启动失败:", err); }
+        } else {
+            recorder.stop();
+            isRecording = false;
+            recStartTime = 0;
+            
+            recStatus.style.display = 'none';
+            btn.innerHTML = '<span class="text-lg">⏺</span><span class="text-sm">开始录制</span>';
+            btn.classList.remove('danger');
+        }
+    }
+
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        document.getElementById('m-timer').innerText = "会议: " + formatTime(Date.now() - startTime);
+        if (isRecording && recStartTime > 0) {
+            document.getElementById('r-timer').innerText = formatTime(Date.now() - recStartTime);
+        }
+    }, 1000);
+
+    // --- Chat Logic ---
+    const chatInput = document.getElementById('chatInput');
+    const btnSend = document.getElementById('btnSend');
+    const chatMessages = document.getElementById('chatMessages');
+
+    function appendMessage(text, type) {
+        const div = document.createElement('div');
+        div.className = 'message flex gap-4 ' + (type === 'user' ? 'flex-row-reverse' : '');
+        
+        const avatar = document.createElement('div');
+        avatar.className = `w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 mt-1 ${type === 'user' ? 'bg-black text-white' : 'bg-black text-white'}`;
+        avatar.innerText = type === 'user' ? 'Me' : 'AI';
+        
+        const content = document.createElement('div');
+        // AI: Gray bubble, User: Black bubble
+        const bubbleClass = type === 'user' 
+            ? 'bg-black text-white p-4 rounded-2xl rounded-tr-none text-sm leading-relaxed'
+            : 'bg-gray-100 text-gray-700 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed';
+            
+        content.className = bubbleClass;
+        content.innerText = text;
+        
+        div.appendChild(avatar);
+        div.appendChild(content);
+        
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function triggerAIResponse() {
+        setTimeout(() => {
+            const responses = [
+                "收到。你的回答逻辑很清晰，能具体举一个例子吗？",
+                "这个问题很有挑战性，你处理得很好。",
+                "了解。那么在团队合作中，你通常扮演什么角色？",
+                "如果遇到意见分歧，你会如何处理？",
+                "好的，让我们继续下一个话题。"
+            ];
+            const randomResp = responses[Math.floor(Math.random() * responses.length)];
+            appendMessage(randomResp, 'ai');
+        }, 1500);
+    }
+
+    function handleSend() {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        appendMessage(text, 'user');
+        chatInput.value = '';
+
+        triggerAIResponse();
+    }
+
+    btnSend.addEventListener('click', handleSend);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSend();
+    });
+
+    // --- Speech Recognition Logic ---
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.lang = 'zh-CN';
+        
+        recognition.onresult = (event) => {
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    const text = event.results[i][0].transcript;
+                    if (text.trim()) {
+                        appendMessage(text, 'user');
+                        triggerAIResponse();
+                    }
+                }
+            }
+        };
+
+        recognition.onerror = (event) => {
+            console.error('Speech recognition error', event.error);
+        };
+    } else {
+        console.warn('Speech Recognition API not supported in this browser.');
+    }
+</script>
+</body>
+</html>

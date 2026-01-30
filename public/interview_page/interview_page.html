@@ -144,9 +144,18 @@
 
         <!-- 聊天/侧边栏区域 -->
         <aside class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10">
-            <div class="h-16 border-b border-gray-50 flex items-center px-6 gap-3">
-                <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                <span class="font-serif text-lg font-medium">Interview Chat</span>
+            <div class="h-16 border-b border-gray-50 flex items-center justify-between px-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
+                    <span class="font-serif text-lg font-medium">Interview Chat</span>
+                </div>
+                <button id="btn-voice-toggle" class="text-gray-400 hover:text-gray-600 transition-colors" title="开启/关闭语音朗读">
+                    <!-- 默认为开启状态图标 -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+                        <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 2.75 2.75 0 000-11.668.75.75 0 010-1.06z" />
+                        <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
+                    </svg>
+                </button>
             </div>
             
             <div class="flex-1 overflow-y-auto p-6 space-y-6 chat-scroll" id="chatMessages">
@@ -341,10 +350,85 @@
         }
     }, 1000);
 
+    // --- Speech Synthesis Logic ---
+    let isVoiceEnabled = true; // 默认开启语音
+    const btnVoiceToggle = document.getElementById('btn-voice-toggle');
+    
+    // 初始化语音设置
+    function initSpeech() {
+        if (!window.speechSynthesis) {
+            console.warn("当前浏览器不支持 Speech Synthesis API");
+            btnVoiceToggle.style.display = 'none';
+            isVoiceEnabled = false;
+            return;
+        }
+
+        // 尝试预加载语音列表
+        window.speechSynthesis.getVoices();
+        
+        btnVoiceToggle.addEventListener('click', () => {
+            isVoiceEnabled = !isVoiceEnabled;
+            updateVoiceIcon();
+            if (!isVoiceEnabled) {
+                window.speechSynthesis.cancel(); // 立即停止正在播放的语音
+            }
+        });
+    }
+
+    function updateVoiceIcon() {
+        if (isVoiceEnabled) {
+            // 开启状态图标 (音量波纹)
+            btnVoiceToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-600">
+                    <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 2.75 2.75 0 000-11.668.75.75 0 010-1.06z" />
+                    <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
+                </svg>`;
+        } else {
+            // 关闭状态图标 (静音)
+            btnVoiceToggle.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-gray-400">
+                    <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM17.78 9.22a.75.75 0 10-1.06 1.06L18.44 12l-1.72 1.72a.75.75 0 101.06 1.06l1.72-1.72 1.72 1.72a.75.75 0 101.06-1.06L20.56 12l1.72-1.72a.75.75 0 10-1.06-1.06l-1.72 1.72-1.72-1.72z" />
+                </svg>`;
+        }
+    }
+
+    function speakText(text) {
+        if (!isVoiceEnabled || !window.speechSynthesis) return;
+
+        // 停止之前的语音
+        window.speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-CN'; // 设置为中文
+        utterance.rate = 1.0; // 语速 (0.1 - 10)
+        utterance.pitch = 1.0; // 音调 (0 - 2)
+        
+        // 尝试选择更自然的中文语音 (不同浏览器支持不同)
+        const voices = window.speechSynthesis.getVoices();
+        const zhVoices = voices.filter(v => v.lang.includes('zh') || v.lang.includes('CN'));
+        
+        // 优先选择包含 "Google" 或 "Microsoft" 的中文语音，通常质量较好
+        const preferredVoice = zhVoices.find(v => v.name.includes('Google') || v.name.includes('Microsoft')) || zhVoices[0];
+        if (preferredVoice) {
+            utterance.voice = preferredVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // 初始化
+    initSpeech();
+    updateVoiceIcon();
+
     // --- Chat Logic ---
     const chatInput = document.getElementById('chatInput');
     const btnSend = document.getElementById('btnSend');
     const chatMessages = document.getElementById('chatMessages');
+
+    let conversationHistory = [
+        { role: 'system', content: '你是一个专业的AI面试官。请保持专业、友好，并针对用户的回答进行追问或评价。' },
+        { role: 'assistant', content: '你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。' }
+    ];
 
     function appendMessage(text, type) {
         const div = document.createElement('div');
@@ -370,18 +454,66 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function triggerAIResponse() {
-        setTimeout(() => {
-            const responses = [
-                "收到。你的回答逻辑很清晰，能具体举一个例子吗？",
-                "这个问题很有挑战性，你处理得很好。",
-                "了解。那么在团队合作中，你通常扮演什么角色？",
-                "如果遇到意见分歧，你会如何处理？",
-                "好的，让我们继续下一个话题。"
-            ];
-            const randomResp = responses[Math.floor(Math.random() * responses.length)];
-            appendMessage(randomResp, 'ai');
-        }, 1500);
+    async function triggerAIResponse() {
+        // Show loading state
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'ai-loading';
+        loadingDiv.className = 'message flex gap-4';
+        loadingDiv.innerHTML = `
+            <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm shrink-0 mt-1">AI</div>
+            <div class="bg-gray-100 text-gray-700 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed">
+                <span class="animate-pulse">思考中...</span>
+            </div>
+        `;
+        chatMessages.appendChild(loadingDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        try {
+            // Use absolute URL to support Live Server or other environments
+            const response = await fetch('http://localhost:3000/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: conversationHistory })
+            });
+
+            const loadingEl = document.getElementById('ai-loading');
+            if (loadingEl) loadingEl.remove();
+
+            if (!response.ok) {
+                let errorDetails;
+                try {
+                    errorDetails = await response.json();
+                } catch (e) {
+                    // 如果解析 JSON 失败，说明返回的可能不是 JSON (比如 404 HTML 页面或空响应)
+                    // 这通常意味着后端服务未启动或路径错误
+                    throw new Error(`服务器连接失败 (Status: ${response.status})。请确认后端服务已通过 'node server.js' 启动。`);
+                }
+                console.error('API Error:', errorDetails);
+                throw new Error(errorDetails.error || 'API request failed');
+            }
+
+            const data = await response.json();
+            const aiText = data.choices[0].message.content;
+
+            appendMessage(aiText, 'ai');
+            conversationHistory.push({ role: 'assistant', content: aiText });
+            
+            // 触发语音朗读
+            speakText(aiText);
+
+        } catch (error) {
+            const loadingEl = document.getElementById('ai-loading');
+            if (loadingEl) loadingEl.remove();
+            
+            console.error('AI Response Error:', error);
+            
+            let errorMsg = error.message;
+            if (errorMsg === 'Failed to fetch') {
+                errorMsg = '无法连接到服务器。请确保后端服务正在运行 (node server.js)。';
+            }
+            
+            alert('AI 响应出错: ' + errorMsg);
+        }
     }
 
     function handleSend() {
@@ -389,6 +521,7 @@
         if (!text) return;
 
         appendMessage(text, 'user');
+        conversationHistory.push({ role: 'user', content: text });
         chatInput.value = '';
 
         triggerAIResponse();
@@ -414,6 +547,7 @@
                     const text = event.results[i][0].transcript;
                     if (text.trim()) {
                         appendMessage(text, 'user');
+                        conversationHistory.push({ role: 'user', content: text });
                         triggerAIResponse();
                     }
                 }

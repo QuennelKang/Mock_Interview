@@ -427,8 +427,24 @@
             
             if (data.audioUrl) {
                 currentAudio = new Audio(data.audioUrl);
-                currentAudio.onplay = () => console.log('[TTS] Audio started playing');
-                currentAudio.onended = () => console.log('[TTS] Audio finished playing');
+                
+                currentAudio.onplay = () => {
+                    console.log('[TTS] Audio started playing');
+                    // AI 说话时暂停语音识别，防止"自言自语"
+                    if (recognition && isRecordingSpeech) {
+                        try { recognition.stop(); } catch(e) { console.log('Stop rec error:', e); }
+                    }
+                };
+                
+                currentAudio.onended = () => {
+                    console.log('[TTS] Audio finished playing');
+                    // AI 说完后，如果麦克风是开启状态，恢复语音识别
+                    const btnMic = document.getElementById('btn-mic');
+                    if (recognition && btnMic.classList.contains('active')) {
+                        try { recognition.start(); } catch(e) { console.log('Start rec error:', e); }
+                    }
+                };
+
                 currentAudio.onerror = (e) => {
                     console.error('[TTS Error] Audio playback failed:', e);
                     alert('语音播放失败，请检查浏览器控制台');
@@ -467,7 +483,7 @@
         div.className = 'message flex gap-4 ' + (type === 'user' ? 'flex-row-reverse' : '');
         
         const avatar = document.createElement('div');
-        avatar.className = `w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 mt-1 ${type === 'user' ? 'bg-black text-white' : 'bg-black text-white'}`;
+        avatar.className = `w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 mt-1 ${type === 'user' ? 'bg-[#2332fa] text-white' : 'bg-black text-white'}`;
         avatar.innerText = type === 'user' ? 'Me' : 'AI';
         
         const content = document.createElement('div');
@@ -549,6 +565,12 @@
     }
 
     function handleSend() {
+        // Clear any pending auto-send timer
+        if (silenceTimer) {
+            clearTimeout(silenceTimer);
+            silenceTimer = null;
+        }
+
         const text = chatInput.value.trim();
         if (!text) return;
 
@@ -567,22 +589,36 @@
     // --- Speech Recognition Logic ---
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition = null;
+    let isRecordingSpeech = false;
+    let silenceTimer = null;
 
     if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.lang = 'zh-CN';
         
+        recognition.onstart = () => { isRecordingSpeech = true; };
+        recognition.onend = () => { isRecordingSpeech = false; };
+        
         recognition.onresult = (event) => {
+            let hasNewContent = false;
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     const text = event.results[i][0].transcript;
                     if (text.trim()) {
-                        appendMessage(text, 'user');
-                        conversationHistory.push({ role: 'user', content: text });
-                        triggerAIResponse();
+                        // 将识别到的文本追加到输入框
+                        chatInput.value = (chatInput.value ? chatInput.value + ' ' : '') + text;
+                        hasNewContent = true;
                     }
                 }
+            }
+            
+            if (hasNewContent) {
+                // 重置倒计时：只有当用户停止说话超过 2.5 秒后才自动发送
+                if (silenceTimer) clearTimeout(silenceTimer);
+                silenceTimer = setTimeout(() => {
+                    handleSend();
+                }, 2500);
             }
         };
 

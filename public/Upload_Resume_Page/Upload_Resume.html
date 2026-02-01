@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
         // 配置 PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -345,12 +346,16 @@
     }
 
     // 显示模态框
-    function showModal(title, content, type = 'info') {
+    let modalOnCloseCallback = null;
+
+    function showModal(title, content, type = 'info', onClose = null) {
         const modal = document.getElementById('customModal');
         const icon = document.getElementById('modalIcon');
         const titleEl = document.getElementById('modalTitle');
         const contentEl = document.getElementById('modalContent');
         
+        modalOnCloseCallback = onClose;
+
         // 设置内容
         titleEl.textContent = title;
         contentEl.textContent = content;
@@ -374,6 +379,85 @@
         const modal = document.getElementById('customModal');
         modal.classList.add('hidden');
         document.body.style.overflow = ''; // 恢复滚动
+        
+        if (modalOnCloseCallback) {
+            modalOnCloseCallback();
+            modalOnCloseCallback = null;
+        }
+    }
+
+    // 处理 PDF ArrayBuffer 的通用函数
+    async function processPdfBuffer(arrayBuffer) {
+        try {
+            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+            let fullText = '';
+            const maxPages = Math.min(pdf.numPages, 5);
+            
+            // 初始化 OCR Worker (复用)
+            let worker = null;
+
+            for (let i = 1; i <= maxPages; i++) {
+                const page = await pdf.getPage(i);
+                
+                // 1. 获取常规文本
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(' ');
+                fullText += `[Page ${i} Text]\n${pageText}\n\n`;
+
+                // 2. 检查并提取图片 (OCR)
+                try {
+                    const ops = await page.getOperatorList();
+                    const imgTypes = [pdfjsLib.OPS.paintImageXObject, pdfjsLib.OPS.paintInlineImageXObject];
+                    
+                    let hasImages = false;
+                    for (let j = 0; j < ops.fn.length; j++) {
+                        if (imgTypes.includes(ops.fn[j])) {
+                            hasImages = true;
+                            break;
+                        }
+                    }
+
+                    if (hasImages) {
+                        // 如果这一页有图片，且文字很少(可能是扫描件)，或者为了保险起见，
+                        // 我们渲染整个页面到 Canvas 进行 OCR。
+                        // 直接提取 image object 比较复杂，渲染页面是更通用的做法。
+                        
+                        // 简单的启发式：如果页面文字少于 100 字，极可能是扫描件或图片为主
+                        if (pageText.trim().length < 100) {
+                            if (!worker) {
+                                showModal('正在进行深度识别', '检测到 PDF 中包含图片或扫描内容，正在进行 OCR 识别...', 'info');
+                                worker = await Tesseract.createWorker('chi_sim+eng');
+                            }
+
+                            const viewport = page.getViewport({scale: 1.5});
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+
+                            await page.render({canvasContext: ctx, viewport: viewport}).promise;
+                            
+                            const ret = await worker.recognize(canvas);
+                            if (ret.data.text.trim()) {
+                                fullText += `[Page ${i} OCR Result]\n${ret.data.text}\n\n`;
+                            }
+                        }
+                    }
+                } catch (imgErr) {
+                    console.warn(`Page ${i} image processing failed:`, imgErr);
+                }
+            }
+
+            if (worker) {
+                await worker.terminate();
+            }
+
+            if (pdf.numPages > 5) fullText += `\n... (剩余 ${pdf.numPages - 5} 页未展示)`;
+            return fullText;
+        } catch (e) {
+            console.error('PDF processing error:', e);
+            return `[PDF 解析错误: ${e.message}]`;
+        }
     }
 
     // 解析文件内容辅助函数
@@ -390,7 +474,6 @@
 
                 // 2. 尝试提取嵌入的图片并 OCR
                 try {
-                    // 转换为 HTML 以获取图片 (默认 mammoth 会将图片转为 base64 src)
                     const htmlResult = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(htmlResult.value, 'text/html');
@@ -424,21 +507,34 @@
                     console.warn('DOCX image extraction failed:', imgErr);
                 }
 
+                // 3. 尝试提取嵌入的 PDF 文件
+                try {
+                    const zip = await JSZip.loadAsync(file);
+                    const pdfFiles = [];
+                    zip.forEach((relativePath, zipEntry) => {
+                        if (relativePath.toLowerCase().endsWith('.pdf')) {
+                            pdfFiles.push(zipEntry);
+                        }
+                    });
+
+                    if (pdfFiles.length > 0) {
+                        showModal('正在深入分析', `检测到文档中嵌入了 ${pdfFiles.length} 个 PDF 文件，正在解析...`, 'info');
+                        let pdfText = '';
+                        for (let i = 0; i < pdfFiles.length; i++) {
+                            const pdfData = await pdfFiles[i].async('arraybuffer');
+                            const extracted = await processPdfBuffer(pdfData);
+                            pdfText += `\n[文档嵌入 PDF ${i+1} 内容]:\n${extracted}\n`;
+                        }
+                        finalText += '\n\n--- 嵌入 PDF 补充内容 ---\n' + pdfText;
+                    }
+                } catch (zipErr) {
+                    console.warn('DOCX embedded PDF extraction failed:', zipErr);
+                }
+
                 return finalText;
             } else if (ext === 'pdf') {
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-                let fullText = '';
-                // 限制最多读取前 5 页以防过大
-                const maxPages = Math.min(pdf.numPages, 5);
-                for (let i = 1; i <= maxPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
-                    fullText += `[Page ${i}]\n${pageText}\n\n`;
-                }
-                if (pdf.numPages > 5) fullText += `\n... (剩余 ${pdf.numPages - 5} 页未展示)`;
-                return fullText;
+                return await processPdfBuffer(arrayBuffer);
             } else if (['jpg', 'jpeg', 'png', 'bmp'].includes(ext)) {
                 showModal('正在进行 OCR 识别', '正在识别图片中的文字，这可能需要一点时间，请耐心等待...', 'info');
                 const worker = await Tesseract.createWorker('chi_sim+eng');
@@ -507,8 +603,9 @@
         console.log('完整数据对象:', formData);
         console.log('完整简历文本:', fileContent);
 
-        showModal('保存成功', '您的信息已上传至后台，AI 面试官正在准备...', 'success');
-        // location.href = '../main_page.html'; // 可选：跳转回首页
+        showModal('保存成功', '您的信息已上传至后台，AI 面试官正在准备...', 'success', () => {
+            window.location.href = '../interview_page/interview_page.html';
+        });
     }
 </script>
 </body>

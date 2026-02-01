@@ -383,9 +383,48 @@
             if (ext === 'txt') {
                 return await file.text();
             } else if (ext === 'docx') {
+                // 1. 获取常规文本
                 const arrayBuffer = await file.arrayBuffer();
-                const result = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
-                return result.value;
+                const rawResult = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
+                let finalText = rawResult.value;
+
+                // 2. 尝试提取嵌入的图片并 OCR
+                try {
+                    // 转换为 HTML 以获取图片 (默认 mammoth 会将图片转为 base64 src)
+                    const htmlResult = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlResult.value, 'text/html');
+                    const images = doc.querySelectorAll('img');
+
+                    if (images.length > 0) {
+                        showModal('正在深入分析', `检测到文档中包含 ${images.length} 张图片，正在进行 OCR 文字识别...`, 'info');
+                        const worker = await Tesseract.createWorker('chi_sim+eng');
+                        
+                        let imageOcrText = '';
+                        for (let i = 0; i < images.length; i++) {
+                            const imgSrc = images[i].src;
+                            if (imgSrc.startsWith('data:image')) {
+                                try {
+                                    const ret = await worker.recognize(imgSrc);
+                                    if (ret.data.text.trim()) {
+                                        imageOcrText += `\n[文档嵌入图片 ${i+1} OCR]:\n${ret.data.text}\n`;
+                                    }
+                                } catch (ocrErr) {
+                                    console.warn('Embedded image OCR failed:', ocrErr);
+                                }
+                            }
+                        }
+                        await worker.terminate();
+
+                        if (imageOcrText) {
+                            finalText += '\n\n--- 嵌入图片 OCR 补充内容 ---\n' + imageOcrText;
+                        }
+                    }
+                } catch (imgErr) {
+                    console.warn('DOCX image extraction failed:', imgErr);
+                }
+
+                return finalText;
             } else if (ext === 'pdf') {
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;

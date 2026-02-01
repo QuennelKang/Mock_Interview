@@ -6,6 +6,12 @@
     <title>Upload Resume | Mock Munchies</title>
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+    <script>
+        // 配置 PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
     <link rel="stylesheet" href="../css/style.css">
     <style>
         /* 复用 main_page.html 风格的补充样式 */
@@ -370,8 +376,50 @@
         document.body.style.overflow = ''; // 恢复滚动
     }
 
+    // 解析文件内容辅助函数
+    async function extractFileText(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        try {
+            if (ext === 'txt') {
+                return await file.text();
+            } else if (ext === 'docx') {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({arrayBuffer: arrayBuffer});
+                return result.value;
+            } else if (ext === 'pdf') {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+                let fullText = '';
+                // 限制最多读取前 5 页以防过大
+                const maxPages = Math.min(pdf.numPages, 5);
+                for (let i = 1; i <= maxPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += `[Page ${i}]\n${pageText}\n\n`;
+                }
+                if (pdf.numPages > 5) fullText += `\n... (剩余 ${pdf.numPages - 5} 页未展示)`;
+                return fullText;
+            } else if (['jpg', 'jpeg', 'png', 'bmp'].includes(ext)) {
+                showModal('正在进行 OCR 识别', '正在识别图片中的文字，这可能需要一点时间，请耐心等待...', 'info');
+                const worker = await Tesseract.createWorker('chi_sim+eng');
+                const ret = await worker.recognize(file);
+                await worker.terminate();
+                // 识别完成后重新显示原本的"处理中"弹窗，或者保持直到完成
+                return `[OCR 识别结果]\n${ret.data.text}`;
+            } else if (ext === 'doc') {
+                return `[DOC 格式提示] 暂不支持直接在浏览器端解析 .doc (二进制 Word) 格式。请将其另存为 .docx 或 .pdf 后上传以获取最佳体验。`;
+            } else {
+                return `[该格式 (.${ext}) 暂不支持文本提取]`;
+            }
+        } catch (e) {
+            console.error('Text extraction error:', e);
+            return `[内容解析失败: ${e.message}]`;
+        }
+    }
+
     // 保存数据
-    function saveData() {
+    async function saveData() {
         const position = document.getElementById('position').value.trim();
         const jobDesc = document.getElementById('jobDesc').value.trim();
         const file = resumeInput.files[0];
@@ -387,6 +435,12 @@
             return;
         }
 
+        // 显示正在处理
+        showModal('正在处理', '正在解析文件并打包数据，请稍候...', 'info');
+
+        // 提取文件内容
+        const fileContent = await extractFileText(file);
+
         // 模拟保存
         const formData = {
             resume: file.name,
@@ -397,9 +451,22 @@
             jobRequirements: document.getElementById('jobReq').value.trim()
         };
 
-        console.log('=== Final Data Saved ===');
-        console.log(formData);
-        console.log('========================');
+        // 关闭处理中弹窗（为了展示成功弹窗，其实可以直接覆盖）
+        
+        console.log('%c✅ 保存成功 - 数据详情:', 'color: green; font-weight: bold; font-size: 14px;');
+        console.log('--------------------------------');
+        console.log('📂 简历文件:', file.name, `(${Math.round(file.size/1024)} KB, ${file.type})`);
+        console.log('📄 简历内容预览 (Top 5 Pages):');
+        console.log('%c' + (fileContent.length > 500 ? fileContent.substring(0, 500) + '...' : fileContent), 'color: #555; font-style: italic;');
+        console.log('--------------------------------');
+        console.log('🏢 公司名称:', formData.company || '(未填写)');
+        console.log('📝 职位名称:', formData.position);
+        console.log('📄 公司简介:', formData.companyDescription || '(未填写)');
+        console.log('📋 职位描述:', formData.jobDescription);
+        console.log('🎯 职位要求:', formData.jobRequirements || '(未填写)');
+        console.log('--------------------------------');
+        console.log('完整数据对象:', formData);
+        console.log('完整简历文本:', fileContent);
 
         showModal('保存成功', '您的信息已上传至后台，AI 面试官正在准备...', 'success');
         // location.href = '../main_page.html'; // 可选：跳转回首页

@@ -17,13 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Add click handler for start button
-    const startBtns = document.querySelectorAll('.btn-munchies:not(#demoSubmitBtn)');
-    startBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            alert('即将跳转到岗位选择页面... (功能开发中)');
-        });
-    });
+    // Add click handler for start button - Removed as per user request and new navigation logic
+
 
     // Micro Demo Interaction
     const demoSubmitBtn = document.getElementById('demoSubmitBtn');

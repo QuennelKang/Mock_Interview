@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mock Interview | Munchies 风格</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link rel="stylesheet" href="../css/style.css">
     <style>
         /* 保持原有的功能性 CSS，但适配新风格 */
@@ -143,7 +144,7 @@
         </div>
 
         <!-- 聊天/侧边栏区域 -->
-        <aside class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10">
+        <aside id="chatSidebar" class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10">
             <div class="h-16 border-b border-gray-50 flex items-center justify-between px-6">
                 <div class="flex items-center gap-3">
                     <div class="w-2 h-2 rounded-full bg-green-500"></div>
@@ -195,16 +196,57 @@
             <span class="text-lg">🪞</span>
             <span class="text-sm">镜像</span>
         </button>
+        <button id="btn-chat-toggle" onclick="toggleChat()" class="btn-control group active">
+            <span class="text-lg">💬</span>
+            <span class="text-sm">对话</span>
+        </button>
         <div class="w-px h-8 bg-gray-200 mx-2"></div>
         <button id="btn-rec" onclick="toggleRecord()" class="btn-control group hover:bg-red-50 hover:border-red-100 hover:text-red-600">
             <span class="text-lg">⏺</span>
             <span class="text-sm">开始录制</span>
         </button>
-        <button onclick="location.href='../main_page.html'" class="btn-control text-red-600 hover:bg-red-50 border-transparent">
+        <button onclick="showEndModal()" class="btn-control text-red-600 hover:bg-red-50 border-transparent">
             <span class="text-lg">✕</span>
             <span class="text-sm">结束面试</span>
         </button>
     </footer>
+
+    <!-- End Interview Modal -->
+    <div id="endModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 transform transition-all scale-100">
+            <h3 class="text-xl font-bold mb-4 text-center">结束面试</h3>
+            <p class="text-gray-500 text-sm mb-6 text-center">是否保存本次面试的记录？</p>
+            
+            <div class="space-y-3 mb-8">
+                <label class="flex items-center gap-3 p-3 border border-gray-100 rounded-xl hover:bg-gray-50 cursor-pointer transition">
+                    <input type="checkbox" id="check-video" class="w-5 h-5 accent-black" checked>
+                    <div class="flex flex-col">
+                        <span class="font-medium text-sm">视频录制 (Video)</span>
+                        <span class="text-xs text-gray-400">包含画面与声音 (.webm)</span>
+                    </div>
+                </label>
+                <label class="flex items-center gap-3 p-3 border border-gray-100 rounded-xl hover:bg-gray-50 cursor-pointer transition">
+                    <input type="checkbox" id="check-chat" class="w-5 h-5 accent-black" checked>
+                    <div class="flex flex-col">
+                        <span class="font-medium text-sm">对话记录 (Conversation)</span>
+                        <span class="text-xs text-gray-400">文字聊天记录 (.txt)</span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="saveAndExit()" class="flex-1 bg-black text-white py-3 rounded-xl font-medium hover:bg-gray-800 transition">
+                    保存并退出
+                </button>
+                <button onclick="exitWithoutSaving()" class="flex-1 bg-white text-red-600 border border-red-100 py-3 rounded-xl font-medium hover:bg-red-50 transition">
+                    直接退出
+                </button>
+            </div>
+            <button onclick="closeEndModal()" class="w-full mt-3 text-gray-400 text-sm hover:text-gray-600 py-2">
+                取消
+            </button>
+        </div>
+    </div>
 
 <script>
     // 保持原有的逻辑，仅适配类名操作
@@ -237,6 +279,21 @@
         
         btn.classList.toggle('active', isMirrored);
         // 移除 innerHTML 修改，避免覆盖图标
+    }
+
+    function toggleChat() {
+        const chatSidebar = document.getElementById('chatSidebar');
+        const btn = document.getElementById('btn-chat-toggle');
+        
+        if (chatSidebar.classList.contains('hidden')) {
+            chatSidebar.classList.remove('hidden');
+            chatSidebar.classList.add('flex');
+            btn.classList.add('active');
+        } else {
+            chatSidebar.classList.remove('flex');
+            chatSidebar.classList.add('hidden');
+            btn.classList.remove('active');
+        }
     }
 
     async function toggleMic() {
@@ -496,6 +553,116 @@
     updateVoiceIcon();
     // 初始化对话 (必须在 initSpeech 之后，因为可能包含自动播放)
     initConversation();
+
+    // --- Modal Logic ---
+    function showEndModal() {
+        document.getElementById('endModal').classList.remove('hidden');
+    }
+
+    function closeEndModal() {
+        document.getElementById('endModal').classList.add('hidden');
+    }
+
+    function exitWithoutSaving() {
+        window.onbeforeunload = null; // Disable warning
+        location.href = '../main_page.html';
+    }
+
+    async function saveAndExit() {
+        const saveVideo = document.getElementById('check-video').checked;
+        const saveChat = document.getElementById('check-chat').checked;
+        
+        // If nothing is selected, just exit
+        if (!saveVideo && !saveChat) {
+            exitWithoutSaving();
+            return;
+        }
+
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}_${now.getHours().toString().padStart(2,'0')}${now.getMinutes().toString().padStart(2,'0')}`;
+        
+        // Initialize JSZip
+        const zip = new JSZip();
+        // Create a folder inside the zip
+        const folderName = `Interview_Record_${timestamp}`;
+        const folder = zip.folder(folderName);
+        
+        let hasData = false;
+
+        // 1. Prepare Chat History
+        if (saveChat && conversationHistory.length > 0) {
+            let chatContent = `Interview Chat Log - ${now.toLocaleString()}\n\n`;
+            conversationHistory.forEach(msg => {
+                const role = msg.role === 'user' ? 'Me' : (msg.role === 'assistant' ? 'AI' : 'System');
+                if (role !== 'System') { 
+                    chatContent += `[${role}]: ${msg.content}\n\n`;
+                }
+            });
+            folder.file(`Interview_Chat_${timestamp}.txt`, chatContent);
+            hasData = true;
+        }
+
+        // 2. Prepare Video
+        if (saveVideo) {
+            let videoBlob = null;
+
+            if (recorder && isRecording) {
+                 recorder.stop();
+                 // Wait a bit for onstop to fire and process chunks
+                 await new Promise(resolve => setTimeout(resolve, 500)); 
+            }
+            
+            if (chunks.length > 0) {
+                 videoBlob = new Blob(chunks, { type: 'video/webm' });
+            }
+
+            if (videoBlob) {
+                folder.file(`Interview_Video_${timestamp}.webm`, videoBlob);
+                hasData = true;
+            } else if (!recorder || chunks.length === 0) {
+                 console.log("No recording data found.");
+            }
+        }
+
+        if (hasData) {
+            try {
+                // Generate ZIP file
+                const content = await zip.generateAsync({type:"blob"});
+                // Download ZIP
+                downloadBlob(content, `${folderName}.zip`);
+            } catch (e) {
+                console.error("Failed to zip files:", e);
+                alert("打包下载失败，请重试");
+                return;
+            }
+        }
+
+        // Delay exit to allow download to start
+        setTimeout(() => {
+            exitWithoutSaving();
+        }, 2000);
+    }
+
+    function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // Warn on close
+    window.onbeforeunload = function(e) {
+        // Only warn if there is data (chat or recording)
+        if (conversationHistory.length > 1 || (recorder && chunks.length > 0)) {
+            e.preventDefault();
+            e.returnValue = ''; // Standard for Chrome
+            return '您有未保存的面试记录，确定要离开吗？';
+        }
+    };
 
     // 初始化对话历史
     function initConversation() {

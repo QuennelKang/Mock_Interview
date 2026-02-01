@@ -149,7 +149,7 @@
                 <div>
                     <h3 class="font-bold text-blue-900 mb-1">隐私安全提示</h3>
                     <p class="text-blue-800 text-sm leading-relaxed">
-                        在保存之前，请确保您的简历预览中已去除 <span class="font-bold">姓名、电话、邮箱地址</span> 等个人敏感隐私信息。
+                        在保存之前，请确保您的简历预览中已去除 <span class="font-bold">姓名、电话、家庭住址、邮箱地址</span> 等个人敏感隐私信息。
                         这是为了保护您的个人数据安全。
                     </p>
                 </div>
@@ -602,6 +602,28 @@
         console.log('--------------------------------');
         console.log('完整数据对象:', formData);
         console.log('完整简历文本:', fileContent);
+
+        // 生成基于时间的问候语
+        const hour = new Date().getHours();
+        let timeGreeting = 'Good morning';
+        if (hour >= 12 && hour < 18) timeGreeting = 'Good afternoon';
+        else if (hour >= 18) timeGreeting = 'Good evening'
+        // 生成 AI 面试官提示词
+        const systemPrompt = `背景：这是我的简历，我现在需要进行${formData.position}面试。
+        已知面试的公司专注于${formData.companyDescription || '该行业领域'}
+        任务：你需要选择一个你认为最契合这个领域的顶尖专家，这是${formData.jobDescription}和${formData.jobRequirements}从他的角度来思考你需要一个什么样的${formData.position}，并与我进行模拟面试，面试过程中你只需要针对我的简历内容进行提问，拒绝提问其他任何不相关的内容。
+        输出格式：第一次输出，请不要进行自我介绍，直接开始面试。你需要回答你选择模拟哪一位专家并解释理由，接着针对我的简历问出一个你最感兴趣的问题，并解释原因、你希望我从哪些角度回答。之后的回答中，请对我的回答进行简短的反馈（不超过两句话），然后直接提出下一个问题。
+        注意：在反馈时，严禁使用 "Feedback:"、"Review:"、"点评："、"评价：" 等任何标签或前缀。请直接自然地给出你的看法。例如，不要说 "Feedback: Your answer is good."，而要直接说 "That's a good point."。不要提供长篇大论的改进建议、潜力分析或角色理解度报告，除非我明确要求。保持对话节奏紧凑，专注于面试提问本身。
+        这是一场英文面试，所以接下来都是英文的问题和回答。
+        第一句话必须严格按照此格式（替换括号内容）："Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, [First Question]"
+
+        [简历内容]:
+        ${fileContent}`;
+
+        // 保存 Prompt 到 localStorage 供 interview_page.html 使用
+        localStorage.setItem('interview_system_prompt', systemPrompt);
+        // 保存用户简历数据以备不时之需
+        localStorage.setItem('interview_user_data', JSON.stringify(formData));
 
         showModal('保存成功', '您的信息已上传至后台，AI 面试官正在准备...', 'success', () => {
             window.location.href = '../interview_page/interview_page.html';

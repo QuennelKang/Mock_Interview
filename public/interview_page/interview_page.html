@@ -159,15 +159,10 @@
             </div>
             
             <div class="flex-1 overflow-y-auto p-6 space-y-6 chat-scroll" id="chatMessages">
-                <div class="message flex gap-4">
-                    <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm shrink-0 mt-1">AI</div>
-                    <div class="bg-gray-100 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed text-gray-700">
-                        你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。
-                    </div>
-                </div>
+                <!-- 初始状态为空，等待 JS 动态插入或 AI 自动开场 -->
             </div>
 
-            <div class="p-4 border-t border-gray-50 bg-white">
+            <div class="p-4 border-t border-gray-50 bg-white relative z-30">
                 <div class="relative">
                     <input type="text" id="chatInput" 
                         class="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5 focus:bg-white transition-all placeholder-gray-400"
@@ -177,6 +172,9 @@
                             <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
                         </svg>
                     </button>
+                </div>
+                <div class="mt-2 text-xs text-gray-400 text-center">
+                    提示：说 "回答完毕" / "Over" 或点击发送按钮结束回答
                 </div>
             </div>
         </aside>
@@ -396,12 +394,22 @@
         : 'http://localhost:3000';
 
     async function speakText(text) {
+        // 自动开启语音
         if (!isVoiceEnabled) {
-            console.log('[TTS] Voice is disabled');
-            return;
+            isVoiceEnabled = true;
+            updateVoiceIcon();
         }
 
-        console.log('[TTS] Requesting speech for:', text.substring(0, 50) + '...');
+        // 截断过长的文本，防止 TTS 生成失败或超时
+        // 500字符通常是合理的 TTS 单次请求上限，且能保证回答的精简性
+        const MAX_TTS_LENGTH = 500;
+        let textToSpeak = text;
+        if (text.length > MAX_TTS_LENGTH) {
+            console.warn(`[TTS] Text too long (${text.length} chars), truncating to ${MAX_TTS_LENGTH} chars.`);
+            textToSpeak = text.substring(0, MAX_TTS_LENGTH) + "...";
+        }
+
+        console.log('[TTS] Requesting speech for:', textToSpeak.substring(0, 50) + '...');
 
         // 停止之前的语音
         if (currentAudio) {
@@ -413,7 +421,7 @@
             const response = await fetch(`${API_BASE_URL}/api/tts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: text })
+                body: JSON.stringify({ text: textToSpeak })
             });
 
             if (!response.ok) {
@@ -427,7 +435,8 @@
             
             if (data.audioUrl) {
                 currentAudio = new Audio(data.audioUrl);
-                
+                isAISpeaking = true; // 标记 AI 正在说话（或即将说话）
+
                 currentAudio.onplay = () => {
                     console.log('[TTS] Audio started playing');
                     // AI 说话时暂停语音识别，防止"自言自语"
@@ -438,16 +447,28 @@
                 
                 currentAudio.onended = () => {
                     console.log('[TTS] Audio finished playing');
-                    // AI 说完后，如果麦克风是开启状态，恢复语音识别
-                    const btnMic = document.getElementById('btn-mic');
-                    if (recognition && btnMic.classList.contains('active')) {
-                        try { recognition.start(); } catch(e) { console.log('Start rec error:', e); }
-                    }
+                    currentAudio = null; // 清理
+                    
+                    // 延迟恢复麦克风，防止回声误触发，并给用户反应时间
+                    setTimeout(() => {
+                        isAISpeaking = false; // 解除标记
+                        
+                        // AI 说完后，如果麦克风是开启状态，恢复语音识别
+                        const btnMic = document.getElementById('btn-mic');
+                        if (recognition && btnMic.classList.contains('active')) {
+                            try { recognition.start(); } catch(e) { console.log('Start rec error:', e); }
+                        }
+                    }, 1500); // 1.5秒延迟
                 };
 
                 currentAudio.onerror = (e) => {
                     console.error('[TTS Error] Audio playback failed:', e);
-                    alert('语音播放失败，请检查浏览器控制台');
+                    isAISpeaking = false; // 出错时立即解除
+                    // 尝试恢复麦克风
+                    const btnMic = document.getElementById('btn-mic');
+                    if (recognition && btnMic.classList.contains('active')) {
+                        try { recognition.start(); } catch(err) { console.log('Start rec recovery error:', err); }
+                    }
                 };
                 
                 // Handle autoplay restrictions
@@ -455,28 +476,53 @@
                     await currentAudio.play();
                 } catch (playError) {
                     console.error('[TTS Error] Play failed (autoplay?):', playError);
+                    isAISpeaking = false; // 播放失败解除
                 }
             }
         } catch (error) {
             console.error('TTS Error:', error);
-            // 降级到浏览器原生 TTS? 或者只记录错误
-            // speakTextNative(text); // 可以保留原生作为 fallback，这里先保持简单
         }
     }
-
-    // 初始化
-    initSpeech();
-    updateVoiceIcon();
 
     // --- Chat Logic ---
     const chatInput = document.getElementById('chatInput');
     const btnSend = document.getElementById('btnSend');
     const chatMessages = document.getElementById('chatMessages');
 
-    let conversationHistory = [
-        { role: 'system', content: '你是一个专业的AI面试官。请保持专业、友好，并针对用户的回答进行追问或评价。' },
-        { role: 'assistant', content: '你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。' }
-    ];
+    let conversationHistory = [];
+
+    // 初始化
+    initSpeech();
+    updateVoiceIcon();
+    // 初始化对话 (必须在 initSpeech 之后，因为可能包含自动播放)
+    initConversation();
+
+    // 初始化对话历史
+    function initConversation() {
+        const storedPrompt = localStorage.getItem('interview_system_prompt');
+        if (storedPrompt) {
+            // 如果有自定义 Prompt，作为系统指令，并直接让 AI 开始
+            conversationHistory.push({ role: 'system', content: storedPrompt });
+            // 自动触发第一条消息
+            setTimeout(() => {
+                triggerAIResponse();
+            }, 1000);
+            
+            // 清除 storage 防止刷新页面重复触发(可选，视需求而定，这里暂时保留以便刷新还能继续)
+            // localStorage.removeItem('interview_system_prompt'); 
+        } else {
+            // 默认行为
+            conversationHistory.push({ role: 'system', content: '你是一个专业的AI面试官。请保持专业、友好，并针对用户的回答进行追问或评价。' });
+            // 移除默认的开场白，等待用户输入或由其他逻辑触发
+            // conversationHistory.push({ role: 'assistant', content: '你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。' });
+            // appendMessage('你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。', 'ai');
+            
+            // 自动触发一次 AI 发言 (基于系统提示词)
+             setTimeout(() => {
+                triggerAIResponse();
+            }, 1000);
+        }
+    }
 
     function appendMessage(text, type) {
         const div = document.createElement('div');
@@ -601,25 +647,55 @@
         recognition.onend = () => { isRecordingSpeech = false; };
         
         recognition.onresult = (event) => {
-            let hasNewContent = false;
+            // 如果 AI 正在说话，直接忽略识别结果，防止"自言自语"
+            if (isAISpeaking) {
+                console.log('Ignored speech result because AI is speaking.');
+                return;
+            }
+
+            // 只要有任何识别结果，清除旧的定时器（虽然不再自动发送，但保持清理是个好习惯）
+            if (silenceTimer) {
+                clearTimeout(silenceTimer);
+                silenceTimer = null;
+            }
+
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
-                    const text = event.results[i][0].transcript;
+                    let text = event.results[i][0].transcript;
+                    
+                    // 关键词检测 (支持中文和英文)
+                    // 注意：如果 recognition.lang 是 zh-CN，简单的英文单词如 Over 通常也能识别，
+                    // 但建议用户说中文指令更准确
+                    const lowerText = text.toLowerCase().trim();
+                    // 移除标点符号以便匹配
+                    const cleanText = lowerText.replace(/[.,!?;:。，！？]/g, '');
+                    
+                    const isEndCommand = cleanText.includes('回答完毕') || 
+                                         cleanText.includes('over') || 
+                                         cleanText.endsWith('发送');
+                    
+                    if (isEndCommand) {
+                        // 尝试从文本中移除关键词
+                        text = text.replace(/回答完毕|over|发送/gi, '').trim();
+                        // 移除可能的末尾标点
+                        text = text.replace(/[.,!?;:。，！？]+$/, '');
+                    }
+
                     if (text.trim()) {
                         // 将识别到的文本追加到输入框
                         chatInput.value = (chatInput.value ? chatInput.value + ' ' : '') + text;
-                        hasNewContent = true;
+                    }
+                    
+                    if (isEndCommand) {
+                        // 检测到结束指令，立即发送
+                        handleSend();
+                        return; 
                     }
                 }
             }
             
-            if (hasNewContent) {
-                // 重置倒计时：只有当用户停止说话超过 2.5 秒后才自动发送
-                if (silenceTimer) clearTimeout(silenceTimer);
-                silenceTimer = setTimeout(() => {
-                    handleSend();
-                }, 2500);
-            }
+            // 已移除自动发送定时器 (silenceTimer)，防止未说完就被打断
+            // 用户现在必须说出关键词或点击发送按钮
         };
 
         recognition.onerror = (event) => {

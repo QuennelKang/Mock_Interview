@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Resume | Mock Munchies</title>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        /* 复用 main_page.html 风格的补充样式 */
+        .serif { font-family: 'Times New Roman', Times, serif; }
+        .btn-munchies {
+            background-color: black;
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-munchies:hover {
+            background-color: #333;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background-color: white;
+            color: black;
+            border: 1px solid #e5e7eb;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-secondary:hover {
+            background-color: #f9fafb;
+            border-color: #d1d5db;
+        }
+        .input-field {
+            width: 100%;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .input-field:focus {
+            border-color: black;
+        }
+        .label-text {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #374151;
+        }
+    </style>
+</head>
+<body class="antialiased bg-white text-gray-900 flex flex-col min-h-screen">
+
+    <!-- 顶部导航栏 (保持一致) -->
+    <nav class="flex justify-between items-center px-8 md:px-16 py-8 border-b border-gray-100">
+        <a href="../main_page.html" class="text-2xl font-bold tracking-tighter serif">Mock<span class="text-gray-400">.</span>Munchies</a>
+        <div class="hidden md:flex space-x-12 text-sm uppercase tracking-widest font-medium items-center">
+            <a href="../main_page.html" class="hover:text-gray-500 transition">返回首页</a>
+            <a href="#" class="hover:text-gray-500 transition">练习中心</a>
+        </div>
+    </nav>
+
+    <!-- 主体内容 -->
+    <main class="flex-grow max-w-4xl mx-auto w-full px-8 py-12">
+        
+        <div class="text-center mb-12">
+            <span class="text-xs uppercase tracking-[0.3em] text-gray-400 font-bold">Preparation</span>
+            <h1 class="text-4xl serif mt-4 mb-4">完善面试信息</h1>
+            <p class="text-gray-500 font-light">上传简历并填写职位详情，让 AI 为您定制专属面试体验。</p>
+        </div>
+
+        <!-- 表单区域 -->
+        <div id="formSection" class="space-y-10 animate-fade-in">
+            
+            <!-- 1. 简历上传 -->
+            <section class="bg-gray-50 p-8 rounded-2xl border border-gray-100">
+                <h2 class="text-xl font-bold mb-6 flex items-center">
+                    <span class="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center text-sm mr-3">1</span>
+                    上传简历
+                </h2>
+                
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-100 transition relative cursor-pointer" id="dropZone">
+                    <input type="file" id="resumeInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+                           accept=".pdf,.doc,.docx,.jpeg,.png,.bmp,.txt">
+                    <div class="text-4xl mb-4">📄</div>
+                    <p class="font-medium text-lg mb-2">点击或拖拽上传简历</p>
+                    <p class="text-gray-400 text-sm">支持 PDF, DOC, DOCX, JPEG, PNG, BMP, TXT</p>
+                    <p id="fileNameDisplay" class="mt-4 text-blue-600 font-medium hidden"></p>
+                </div>
+                <p id="uploadError" class="text-red-500 text-sm mt-2 hidden"></p>
+            </section>
+
+            <!-- 2. 职位信息 -->
+            <section class="bg-white p-0">
+                <h2 class="text-xl font-bold mb-6 flex items-center">
+                    <span class="w-8 h-8 bg-black text-white rounded-full flex items-center justify-center text-sm mr-3">2</span>
+                    职位详情
+                </h2>
+                
+                <div class="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="label-text">公司名称</label>
+                        <input type="text" id="companyName" class="input-field" placeholder="例如：Munchies Tech">
+                    </div>
+                    <div>
+                        <label class="label-text">职位名称 <span class="text-red-500">*</span></label>
+                        <input type="text" id="position" class="input-field" placeholder="例如：高级前端工程师">
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label class="label-text">公司简介</label>
+                    <textarea id="companyDesc" rows="3" class="input-field resize-none" placeholder="简单介绍公司背景..."></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="label-text">职位描述 (JD) <span class="text-red-500">*</span></label>
+                    <textarea id="jobDesc" rows="5" class="input-field resize-none" placeholder="输入职位的主要职责..."></textarea>
+                </div>
+
+                <div class="mb-6">
+                    <label class="label-text">职位要求</label>
+                    <textarea id="jobReq" rows="5" class="input-field resize-none" placeholder="输入任职资格要求..."></textarea>
+                </div>
+            </section>
+
+            <div class="flex justify-end pt-6">
+                <button onclick="goToPreview()" class="btn-munchies">下一步：预览信息 →</button>
+            </div>
+        </div>
+
+        <!-- 预览区域 (默认隐藏) -->
+        <div id="previewSection" class="hidden space-y-8 animate-fade-in">
+            <div class="bg-blue-50 border border-blue-100 p-6 rounded-xl flex items-start gap-4">
+                <div class="text-blue-500 text-xl">ℹ️</div>
+                <div>
+                    <h3 class="font-bold text-blue-900 mb-1">隐私安全提示</h3>
+                    <p class="text-blue-800 text-sm leading-relaxed">
+                        在保存之前，请确保您的简历预览中已去除 <span class="font-bold">姓名、电话、邮箱地址</span> 等个人敏感隐私信息。
+                        这是为了保护您的个人数据安全。
+                    </p>
+                </div>
+            </div>
+
+            <div class="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
+                <h2 class="text-2xl serif mb-8 border-b pb-4">信息确认</h2>
+                
+                <div class="space-y-6">
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">简历文件</span>
+                        <div class="col-span-2 font-medium" id="previewResume">未上传</div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">公司名称</span>
+                        <div class="col-span-2" id="previewCompany">--</div>
+                    </div>
+                    
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">职位名称</span>
+                        <div class="col-span-2 font-bold" id="previewPosition">--</div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">公司简介</span>
+                        <div class="col-span-2 text-gray-700 leading-relaxed" id="previewCompanyDesc">--</div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">职位描述</span>
+                        <div class="col-span-2 text-gray-700 leading-relaxed whitespace-pre-wrap" id="previewJobDesc">--</div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <span class="text-gray-500 font-medium">职位要求</span>
+                        <div class="col-span-2 text-gray-700 leading-relaxed whitespace-pre-wrap" id="previewJobReq">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-between pt-6">
+                <button onclick="backToEdit()" class="btn-secondary">← 返回编辑</button>
+                <button onclick="saveData()" class="btn-munchies bg-green-600 hover:bg-green-700 border-transparent">确认保存并上传 ✓</button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="py-12 border-t border-gray-50 mt-auto">
+        <div class="max-w-7xl mx-auto px-8 text-center text-sm text-gray-400 uppercase tracking-widest">
+            © 2026 Mock Munchies
+        </div>
+    </footer>
+
+<script>
+    // 允许的文件扩展名
+    const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpeg', 'png', 'bmp', 'txt'];
+
+    const resumeInput = document.getElementById('resumeInput');
+    const fileNameDisplay = document.getElementById('fileNameDisplay');
+    const uploadError = document.getElementById('uploadError');
+
+    // 监听文件上传
+    resumeInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        uploadError.classList.add('hidden');
+        fileNameDisplay.classList.add('hidden');
+
+        if (!file) return;
+
+        const fileExt = file.name.split('.').pop().toLowerCase();
+        
+        if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
+            uploadError.textContent = `格式错误：不支持 .${fileExt} 格式。请上传 PDF, DOC, DOCX, JPEG, PNG, BMP 或 TXT。`;
+            uploadError.classList.remove('hidden');
+            this.value = ''; // 清空输入
+            console.log('File upload failed: Invalid format', file.name);
+            return;
+        }
+
+        // 上传成功逻辑
+        fileNameDisplay.textContent = `已选择文件: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+        fileNameDisplay.classList.remove('hidden');
+        
+        console.log('--- Resume Uploaded ---');
+        console.log('File Name:', file.name);
+        console.log('File Size:', file.size, 'bytes');
+        console.log('File Type:', file.type);
+        console.log('-----------------------');
+    });
+
+    // 切换到预览页
+    async function goToPreview() {
+        // 获取值
+        const companyName = document.getElementById('companyName').value.trim();
+        const companyDesc = document.getElementById('companyDesc').value.trim();
+        const position = document.getElementById('position').value.trim();
+        const jobDesc = document.getElementById('jobDesc').value.trim();
+        const jobReq = document.getElementById('jobReq').value.trim();
+        const file = resumeInput.files[0];
+
+        // 切换显示 (先切换以展示加载状态)
+        document.getElementById('formSection').classList.add('hidden');
+        document.getElementById('previewSection').classList.remove('hidden');
+        window.scrollTo(0, 0);
+        
+        document.getElementById('previewCompany').textContent = companyName || '未填写';
+        document.getElementById('previewCompanyDesc').textContent = companyDesc || '未填写';
+        document.getElementById('previewPosition').textContent = position || '未填写';
+        document.getElementById('previewJobDesc').textContent = jobDesc || '未填写';
+        document.getElementById('previewJobReq').textContent = jobReq || '未填写';
+
+        // 填充预览
+        const previewContainer = document.getElementById('previewResume');
+        previewContainer.innerHTML = '<p class="text-gray-400 text-sm animate-pulse">正在加载预览...</p>'; 
+        previewContainer.className = 'col-span-2'; 
+
+        if (!file) {
+            previewContainer.textContent = '未上传 (将在保存时被拦截)';
+            previewContainer.classList.add('font-medium', 'text-red-500');
+        } else {
+            const fileExt = file.name.split('.').pop().toLowerCase();
+            
+            try {
+                if (['jpg', 'jpeg', 'png', 'bmp'].includes(fileExt)) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.className = 'max-w-full h-auto max-h-96 object-contain border rounded-lg shadow-sm';
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(img);
+                } else if (fileExt === 'pdf') {
+                    const iframe = document.createElement('iframe');
+                    iframe.src = URL.createObjectURL(file);
+                    iframe.className = 'w-full h-96 border rounded-lg bg-gray-50 shadow-sm';
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(iframe);
+                } else if (fileExt === 'txt') {
+                    const text = await file.text();
+                    const pre = document.createElement('pre');
+                    pre.className = 'whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
+                    pre.textContent = text;
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(pre);
+                } else if (fileExt === 'docx') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
+                    const div = document.createElement('div');
+                    div.className = 'prose prose-sm max-w-none bg-white p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
+                    div.innerHTML = result.value;
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(div);
+                } else {
+                    // DOC 或其他
+                    previewContainer.innerHTML = `
+                        <div class="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg border">
+                            <span class="text-2xl">📄</span>
+                            <div>
+                                <p class="font-medium text-gray-900">${file.name}</p>
+                                <p class="text-xs mt-1">该格式 (.${fileExt}) 暂不支持在线内容预览，请确保文件无误。</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error('Preview error:', e);
+                previewContainer.innerHTML = `
+                    <p class="text-red-500 text-sm">
+                        预览生成失败: ${e.message}<br>
+                        <span class="text-gray-400 text-xs">文件已选中 (${file.name})，可继续保存。</span>
+                    </p>
+                `;
+            }
+        }
+    }
+
+    // 返回编辑
+    function backToEdit() {
+        document.getElementById('previewSection').classList.add('hidden');
+        document.getElementById('formSection').classList.remove('hidden');
+        window.scrollTo(0, 0);
+    }
+
+    // 保存数据
+    function saveData() {
+        const position = document.getElementById('position').value.trim();
+        const jobDesc = document.getElementById('jobDesc').value.trim();
+        const file = resumeInput.files[0];
+
+        // 必填项验证
+        let errors = [];
+        if (!file) errors.push('请上传简历文件');
+        if (!position) errors.push('请填写职位名称');
+        if (!jobDesc) errors.push('请填写职位描述');
+
+        if (errors.length > 0) {
+            alert('无法保存，请补充以下必填项：\n\n' + errors.join('\n'));
+            return;
+        }
+
+        // 模拟保存
+        const formData = {
+            resume: file.name,
+            company: document.getElementById('companyName').value.trim(),
+            companyDescription: document.getElementById('companyDesc').value.trim(),
+            position: position,
+            jobDescription: jobDesc,
+            jobRequirements: document.getElementById('jobReq').value.trim()
+        };
+
+        console.log('=== Final Data Saved ===');
+        console.log(formData);
+        console.log('========================');
+
+        alert('保存成功！\n信息已上传至后台 (查看 Console 详情)。');
+        // location.href = '../main_page.html'; // 可选：跳转回首页
+    }
+</script>
+</body>
+</html>

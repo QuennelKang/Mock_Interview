@@ -11,7 +11,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script>
         // 配置 PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        } else {
+            console.warn('PDF.js library not loaded yet.');
+        }
     </script>
     <link rel="stylesheet" href="../css/style.css">
     <style>
@@ -92,13 +96,27 @@
                     上传简历
                 </h2>
                 
-                <div class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-100 transition relative cursor-pointer" id="dropZone">
-                    <input type="file" id="resumeInput" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.bmp,.txt">
-                    <div class="text-4xl mb-4">📄</div>
-                    <p class="font-medium text-lg mb-2">点击或拖拽上传简历</p>
-                    <p class="text-gray-400 text-sm">支持 PDF, DOC, DOCX, JPG, JPEG, PNG, BMP, TXT</p>
-                    <p id="fileNameDisplay" class="mt-4 text-blue-600 font-medium hidden"></p>
+                <div class="relative border-2 border-dashed border-gray-300 rounded-xl p-10 text-center hover:bg-gray-50 hover:border-gray-400 transition cursor-pointer group" id="dropZone">
+                    <!-- 
+                        修复方案：使用绝对定位的透明 input 覆盖整个区域
+                        1. 移除 hidden 类，改用 opacity-0 + absolute inset-0 确保可点击
+                        2. z-50 确保位于最上层
+                        3. 原生 input 负责处理点击和拖拽，无需 JS 模拟
+                    -->
+                    <input type="file" id="resumeInput" 
+                           class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
+                           accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.bmp,.txt"
+                           title="点击选择文件">
+                    
+                    <div class="pointer-events-none relative z-10">
+                        <div class="text-4xl mb-4 group-hover:scale-110 transition-transform">📄</div>
+                        <span class="inline-block bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg shadow-sm mb-3 text-sm font-medium group-hover:bg-gray-50 group-hover:border-gray-300">
+                            选择文件
+                        </span>
+                        <p class="font-medium text-lg mb-2 text-gray-600">或将文件拖拽至此处</p>
+                        <p class="text-gray-400 text-sm">支持 PDF, DOC, DOCX, JPG, PNG, TXT</p>
+                        <p id="fileNameDisplay" class="mt-4 text-blue-600 font-medium hidden"></p>
+                    </div>
                 </div>
                 <p id="uploadError" class="text-red-500 text-sm mt-2 hidden"></p>
             </section>
@@ -200,7 +218,7 @@
     </main>
 
     <!-- Custom Modal -->
-    <div id="customModal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+    <div id="customModal" class="fixed inset-0 z-[9999] flex items-center justify-center hidden">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" onclick="closeModal()"></div>
         <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 relative transform transition-all scale-100">
             <div id="modalIcon" class="text-4xl mb-4"></div>
@@ -222,26 +240,36 @@
     const ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'bmp', 'txt'];
 
     const resumeInput = document.getElementById('resumeInput');
+    const dropZone = document.getElementById('dropZone');
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const uploadError = document.getElementById('uploadError');
 
-    // 监听文件上传
-    resumeInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
+    // 全局变量存储当前选中的文件 (解决 input.files 在某些拖拽场景下赋值失败的问题)
+    let currentResumeFile = null;
+
+    // 统一的文件处理函数
+    function handleFileSelection(file) {
         uploadError.classList.add('hidden');
         fileNameDisplay.classList.add('hidden');
 
         if (!file) return;
+
+        console.log('Processing file:', file.name, file.type, file.size);
 
         const fileExt = file.name.split('.').pop().toLowerCase();
         
         if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
             uploadError.textContent = `格式错误：不支持 .${fileExt} 格式。请上传 *.pdf;*.doc;*.docx;*.jpg;*.jpeg;*.png;*.bmp;*.txt格式。`;
             uploadError.classList.remove('hidden');
-            this.value = ''; // 清空输入
+            // 清空当前文件
+            currentResumeFile = null;
+            resumeInput.value = ''; 
             console.log('File upload failed: Invalid format', file.name);
             return;
         }
+
+        // 保存文件引用
+        currentResumeFile = file;
 
         // 上传成功逻辑
         fileNameDisplay.textContent = `已选择文件: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
@@ -252,89 +280,169 @@
         console.log('File Size:', file.size, 'bytes');
         console.log('File Type:', file.type);
         console.log('-----------------------');
+    }
+
+    // 拖拽视觉反馈 (监听 input 上的事件，因为 input 覆盖了 dropZone)
+    resumeInput.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('border-black', 'bg-gray-50');
+    });
+
+    resumeInput.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-black', 'bg-gray-50');
+    });
+
+    resumeInput.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('border-black', 'bg-gray-50');
+        
+        console.log('File dropped');
+        if (e.dataTransfer.files.length > 0) {
+            // 直接处理文件，不依赖 input.files 赋值 (虽然尝试赋值以保持同步)
+            try {
+                resumeInput.files = e.dataTransfer.files;
+            } catch (err) {
+                console.warn('Failed to set input.files property (browser restriction), utilizing global variable fallback.', err);
+            }
+            handleFileSelection(e.dataTransfer.files[0]);
+        }
+    });
+
+    // 监听文件上传 (点击选择)
+    // 优化：允许重复选择同一文件，并防止事件冒泡导致的死循环
+    resumeInput.addEventListener('click', function(e) {
+        e.stopPropagation(); // 关键：阻止冒泡，防止触发 dropZone 的点击事件
+        this.value = null;   // 关键：清空 value，允许重复选择同一文件
+        console.log('Resume input clicked');
+    });
+
+    resumeInput.addEventListener('change', function(e) {
+        console.log('Input change event fired');
+        handleFileSelection(e.target.files[0]);
+    });
+
+    // 备份交互逻辑：如果用户点击了 dropZone 但没点到 input (虽然 input 覆盖了全屏，但在某些极端布局下可能失效)
+    // 则手动触发 input 的点击
+    dropZone.addEventListener('click', function() {
+        console.log('DropZone clicked, triggering input click');
+        resumeInput.click();
     });
 
     // 切换到预览页
     async function goToPreview() {
-        // 获取值
-        const companyName = document.getElementById('companyName').value.trim();
-        const companyDesc = document.getElementById('companyDesc').value.trim();
-        const position = document.getElementById('position').value.trim();
-        const jobDesc = document.getElementById('jobDesc').value.trim();
-        const jobReq = document.getElementById('jobReq').value.trim();
-        const file = resumeInput.files[0];
-
-        // 切换显示 (先切换以展示加载状态)
-        document.getElementById('formSection').classList.add('hidden');
-        document.getElementById('previewSection').classList.remove('hidden');
-        window.scrollTo(0, 0);
-        
-        document.getElementById('previewCompany').textContent = companyName || '未填写';
-        document.getElementById('previewCompanyDesc').textContent = companyDesc || '未填写';
-        document.getElementById('previewPosition').textContent = position || '未填写';
-        document.getElementById('previewJobDesc').textContent = jobDesc || '未填写';
-        document.getElementById('previewJobReq').textContent = jobReq || '未填写';
-
-        // 填充预览
-        const previewContainer = document.getElementById('previewResume');
-        previewContainer.innerHTML = '<p class="text-gray-400 text-sm animate-pulse">正在加载预览...</p>'; 
-        previewContainer.className = 'col-span-2 font-medium text-center flex justify-center'; 
-
-        if (!file) {
-            previewContainer.textContent = '未上传 (将在保存时被拦截)';
-            previewContainer.classList.add('font-medium', 'text-red-500');
-        } else {
-            const fileExt = file.name.split('.').pop().toLowerCase();
+        console.log('goToPreview called');
+        try {
+            // 获取值
+            const companyName = document.getElementById('companyName').value.trim();
+            const companyDesc = document.getElementById('companyDesc').value.trim();
+            const position = document.getElementById('position').value.trim();
+            const jobDesc = document.getElementById('jobDesc').value.trim();
+            const jobReq = document.getElementById('jobReq').value.trim();
             
-            try {
-                if (['jpg', 'jpeg', 'png', 'bmp'].includes(fileExt)) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.className = 'max-w-full h-auto max-h-96 object-contain border rounded-lg shadow-sm';
-                    previewContainer.innerHTML = '';
-                    previewContainer.appendChild(img);
-                } else if (fileExt === 'pdf') {
-                    const iframe = document.createElement('iframe');
-                    iframe.src = URL.createObjectURL(file);
-                    iframe.className = 'w-full h-96 border rounded-lg bg-gray-50 shadow-sm';
-                    previewContainer.innerHTML = '';
-                    previewContainer.appendChild(iframe);
-                } else if (fileExt === 'txt') {
-                    const text = await file.text();
-                    const pre = document.createElement('pre');
-                    pre.className = 'whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
-                    pre.textContent = text;
-                    previewContainer.innerHTML = '';
-                    previewContainer.appendChild(pre);
-                } else if (fileExt === 'docx') {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const result = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
-                    const div = document.createElement('div');
-                    div.className = 'prose prose-sm max-w-none bg-white p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
-                    div.innerHTML = result.value;
-                    previewContainer.innerHTML = '';
-                    previewContainer.appendChild(div);
-                } else {
-                    // DOC 或其他
-                    previewContainer.innerHTML = `
-                        <div class="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg border">
-                            <span class="text-2xl">📄</span>
-                            <div>
-                                <p class="font-medium text-gray-900">${file.name}</p>
-                                <p class="text-xs mt-1">该格式 (.${fileExt}) 暂不支持在线内容预览，请确保文件无误。</p>
+            // 使用全局变量 currentResumeFile，比 resumeInput.files[0] 更可靠
+            // 添加回退机制：如果全局变量为空，尝试直接从 input 获取
+            const file = currentResumeFile || (resumeInput.files && resumeInput.files[0]);
+            console.log('Preview check - File:', file ? file.name : 'None', 'Position:', position, 'JobDesc:', jobDesc);
+
+            // 必填项验证
+            let errors = [];
+            if (!file) errors.push('• 请上传简历文件');
+            if (!position) errors.push('• 请填写职位名称');
+            if (!jobDesc) errors.push('• 请填写职位描述');
+
+            if (errors.length > 0) {
+                console.warn('Validation failed:', errors);
+                showModal('请补充必填项', errors.join('\n'), 'error');
+                return;
+            }
+
+            // 切换显示 (先切换以展示加载状态)
+            const formSection = document.getElementById('formSection');
+            const previewSection = document.getElementById('previewSection');
+            
+            if (formSection && previewSection) {
+                formSection.classList.add('hidden');
+                previewSection.classList.remove('hidden');
+                window.scrollTo(0, 0);
+            } else {
+                console.error('Section elements not found');
+                return;
+            }
+            
+            document.getElementById('previewCompany').textContent = companyName || '未填写';
+            document.getElementById('previewCompanyDesc').textContent = companyDesc || '未填写';
+            document.getElementById('previewPosition').textContent = position || '未填写';
+            document.getElementById('previewJobDesc').textContent = jobDesc || '未填写';
+            document.getElementById('previewJobReq').textContent = jobReq || '未填写';
+
+            // 填充预览
+            const previewContainer = document.getElementById('previewResume');
+            if (!previewContainer) return;
+
+            previewContainer.innerHTML = '<p class="text-gray-400 text-sm animate-pulse">正在加载预览...</p>'; 
+            previewContainer.className = 'col-span-2 font-medium text-center flex justify-center'; 
+
+            if (!file) {
+                // Should be caught by validation, but just in case
+                previewContainer.textContent = '未上传';
+                previewContainer.classList.add('text-red-500');
+            } else {
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                
+                try {
+                    if (['jpg', 'jpeg', 'png', 'bmp'].includes(fileExt)) {
+                        const img = document.createElement('img');
+                        img.src = URL.createObjectURL(file);
+                        img.className = 'max-w-full h-auto max-h-96 object-contain border rounded-lg shadow-sm';
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(img);
+                    } else if (fileExt === 'pdf') {
+                        const iframe = document.createElement('iframe');
+                        iframe.src = URL.createObjectURL(file);
+                        iframe.className = 'w-full h-96 border rounded-lg bg-gray-50 shadow-sm';
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(iframe);
+                    } else if (fileExt === 'txt') {
+                        const text = await file.text();
+                        const pre = document.createElement('pre');
+                        pre.className = 'whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
+                        pre.textContent = text;
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(pre);
+                    } else if (fileExt === 'docx') {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const result = await mammoth.convertToHtml({arrayBuffer: arrayBuffer});
+                        const div = document.createElement('div');
+                        div.className = 'prose prose-sm max-w-none bg-white p-4 rounded-lg max-h-96 overflow-y-auto border shadow-sm';
+                        div.innerHTML = result.value;
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(div);
+                    } else {
+                        // DOC 或其他
+                        previewContainer.innerHTML = `
+                            <div class="flex items-center space-x-3 text-gray-500 bg-gray-50 p-4 rounded-lg border">
+                                <span class="text-2xl">📄</span>
+                                <div>
+                                    <p class="font-medium text-gray-900">${file.name}</p>
+                                    <p class="text-xs mt-1">该格式 (.${fileExt}) 暂不支持在线内容预览，请确保文件无误。</p>
+                                </div>
                             </div>
-                        </div>
+                        `;
+                    }
+                } catch (e) {
+                    console.error('Preview error:', e);
+                    previewContainer.innerHTML = `
+                        <p class="text-red-500 text-sm">
+                            预览生成失败: ${e.message}<br>
+                            <span class="text-gray-400 text-xs">文件已选中 (${file.name})，可继续保存。</span>
+                        </p>
                     `;
                 }
-            } catch (e) {
-                console.error('Preview error:', e);
-                previewContainer.innerHTML = `
-                    <p class="text-red-500 text-sm">
-                        预览生成失败: ${e.message}<br>
-                        <span class="text-gray-400 text-xs">文件已选中 (${file.name})，可继续保存。</span>
-                    </p>
-                `;
             }
+        } catch (err) {
+            console.error('Critical error in goToPreview:', err);
+            showModal('系统错误', '无法跳转到预览页面，请刷新后重试。\n' + err.message, 'error');
         }
     }
 
@@ -557,7 +665,8 @@
     async function saveData() {
         const position = document.getElementById('position').value.trim();
         const jobDesc = document.getElementById('jobDesc').value.trim();
-        const file = resumeInput.files[0];
+        // 使用全局变量 currentResumeFile (带回退)
+        const file = currentResumeFile || (resumeInput.files && resumeInput.files[0]);
 
         // 必填项验证
         let errors = [];
@@ -608,17 +717,47 @@
         let timeGreeting = 'Good morning';
         if (hour >= 12 && hour < 18) timeGreeting = 'Good afternoon';
         else if (hour >= 18) timeGreeting = 'Good evening'
-        // 生成 AI 面试官提示词
-        const systemPrompt = `背景：这是我的简历，我现在需要进行${formData.position}面试。
-        已知面试的公司专注于${formData.companyDescription || '该行业领域'}
-        任务：你需要选择一个你认为最契合这个领域的顶尖专家，这是${formData.jobDescription}和${formData.jobRequirements}从他的角度来思考你需要一个什么样的${formData.position}，并与我进行模拟面试，面试过程中你只需要针对我的简历内容进行提问，拒绝提问其他任何不相关的内容。
-        输出格式：第一次输出，请不要进行自我介绍，直接开始面试。你需要回答你选择模拟哪一位专家并解释理由，接着针对我的简历问出一个你最感兴趣的问题，并解释原因、你希望我从哪些角度回答。之后的回答中，请对我的回答进行简短的反馈（不超过两句话），然后直接提出下一个问题。
-        注意：在反馈时，严禁使用 "Feedback:"、"Review:"、"点评："、"评价：" 等任何标签或前缀。请直接自然地给出你的看法。例如，不要说 "Feedback: Your answer is good."，而要直接说 "That's a good point."。不要提供长篇大论的改进建议、潜力分析或角色理解度报告，除非我明确要求。保持对话节奏紧凑，专注于面试提问本身。
-        这是一场英文面试，所以接下来都是英文的问题和回答。
-        第一句话必须严格按照此格式（替换括号内容）："Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, [First Question]"
+        // // 生成 AI 面试官提示词
+        // const systemPrompt = `Background: This is my resume content ${fileContent}. I am preparing for an interview for the position of ${formData.position}.
+        // The company specializes in: ${formData.companyDescription || 'this industry'}.
+        // Job description: ${formData.jobDescription}
+        // Job requirements: ${formData.jobRequirements}
 
-        [简历内容]:
-        ${fileContent}`;
+        // Task: Assume the role of a top-tier expert in this field. From their perspective, evaluate what kind of ${formData.position} they would seek, and conduct a mock interview with me.
+
+        // Core Rules:
+        // 1. FIRST OUTPUT ONLY: Start EXACTLY with: "Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, [First Question]" — no explanations, no reasoning, no extra text before or after.
+        // 2. SUBSEQUENT OUTPUTS: After my answer, give brief feedback (max two sentences, no labels like "Feedback:"), then ask ONE next question — based SOLELY on my resume content.
+        // 3. STRICT LIMITATIONS:
+        // - Only ask about experiences, skills, or projects explicitly mentioned in my resume.
+        // - If something isn't in the resume, DO NOT ask about it.
+        // - Never answer for me. Never generate multiple questions. Always wait for my response.
+        // - Entire interview must be in professional English — no Chinese, no markdown, no code.
+        // - All questions and feedback must be in professional, natural English — no Chinese or code.
+
+        // Begin now.
+
+        const systemPrompt = `
+        Background: 
+        - Candidate Resume: ${fileContent}
+        - Targeted Position: ${formData.position}
+        - Company Context: ${formData.companyDescription || 'Leading firm in this sector'}
+        - JD Details: ${formData.jobDescription}
+        - Requirements: ${formData.jobRequirements}
+
+        Task: You are a high-level Technical Hiring Manager. Conduct a rigorous mock interview.
+
+        Strict Protocol:
+        1. FIRST RESPONSE: Start ONLY with "Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, [First Question]". No meta-talk.
+        2. SUBSEQUENT RESPONSES: Provide 1-2 sentences of professional feedback on the previous answer (e.g., "Clear explanation of the architecture, though I'd like to see more focus on the 'why'."), then ask exactly ONE follow-up question.
+        3. RESUME ANCHORING: Every question must link a requirement from the JD to a specific project or skill mentioned in the candidate's resume. Do not invent scenarios outside their provided experience.
+        4. DRILL DOWN: If an answer is high-level, the next question must demand specific metrics, technologies used, or "lessons learned" from that specific resume entry.
+        5. LANGUAGE: Use professional, natural English only. No Markdown formatting, no code blocks, no Chinese.
+
+        Begin the interview now.
+        `;
+
+
 
         // 保存 Prompt 到 localStorage 供 interview_page.html 使用
         localStorage.setItem('interview_system_prompt', systemPrompt);

@@ -248,6 +248,7 @@
         </div>
     </div>
 
+<script src="../js/conversationState.js"></script>
 <script>
     // 保持原有的逻辑，仅适配类名操作
     let stream = null, recorder = null, chunks = [], isRecording = false;
@@ -446,9 +447,13 @@
     }
 
     // Base API URL configuration
-    const API_BASE_URL = window.location.hostname === '127.0.0.1' 
-        ? 'http://127.0.0.1:3000' 
-        : 'http://localhost:3000';
+    // 动态获取后端 API 地址，适配本地开发 (Live Server) 和生产环境
+    const getApiBaseUrl = () => {
+        if (window.location.protocol === 'file:') return 'http://localhost:3000';
+        if (window.location.port === '3000') return '';
+        return `http://${window.location.hostname}:3000`;
+    };
+    const API_BASE_URL = getApiBaseUrl();
 
     async function speakText(text) {
         // 自动开启语音
@@ -546,8 +551,6 @@
     const btnSend = document.getElementById('btnSend');
     const chatMessages = document.getElementById('chatMessages');
 
-    let conversationHistory = [];
-
     // 初始化
     initSpeech();
     updateVoiceIcon();
@@ -590,9 +593,10 @@
         let hasData = false;
 
         // 1. Prepare Chat History
-        if (saveChat && conversationHistory.length > 0) {
+        const history = ConversationState.getHistory();
+        if (saveChat && history.length > 0) {
             let chatContent = `Interview Chat Log - ${now.toLocaleString()}\n\n`;
-            conversationHistory.forEach(msg => {
+            history.forEach(msg => {
                 const role = msg.role === 'user' ? 'Me' : (msg.role === 'assistant' ? 'AI' : 'System');
                 if (role !== 'System') { 
                     chatContent += `[${role}]: ${msg.content}\n\n`;
@@ -657,7 +661,7 @@
     // Warn on close
     window.onbeforeunload = function(e) {
         // Only warn if there is data (chat or recording)
-        if (conversationHistory.length > 1 || (recorder && chunks.length > 0)) {
+        if (ConversationState.getHistory().length > 1 || (recorder && chunks.length > 0)) {
             e.preventDefault();
             e.returnValue = ''; // Standard for Chrome
             return '您有未保存的面试记录，确定要离开吗？';
@@ -666,28 +670,27 @@
 
     // 初始化对话历史
     function initConversation() {
-        const storedPrompt = localStorage.getItem('interview_system_prompt');
-        if (storedPrompt) {
-            // 如果有自定义 Prompt，作为系统指令，并直接让 AI 开始
-            conversationHistory.push({ role: 'system', content: storedPrompt });
-            // 自动触发第一条消息
+        // 使用 ConversationState 管理状态
+        const isNewSession = ConversationState.ensureSystemPrompt();
+        
+        if (isNewSession) {
+            // 如果是新会话，自动触发第一条消息
             setTimeout(() => {
                 triggerAIResponse();
             }, 1000);
-            
-            // 清除 storage 防止刷新页面重复触发(可选，视需求而定，这里暂时保留以便刷新还能继续)
-            // localStorage.removeItem('interview_system_prompt'); 
         } else {
-            // 默认行为
-            conversationHistory.push({ role: 'system', content: '你是一个专业的AI面试官。请保持专业、友好，并针对用户的回答进行追问或评价。' });
-            // 移除默认的开场白，等待用户输入或由其他逻辑触发
-            // conversationHistory.push({ role: 'assistant', content: '你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。' });
-            // appendMessage('你好！我是今天的 AI 面试官。很高兴见到你，请先做一个简单的自我介绍吧。', 'ai');
+            // 如果是现有会话，恢复 UI
+            const history = ConversationState.getHistory();
+            console.log('Restoring conversation history:', history);
             
-            // 自动触发一次 AI 发言 (基于系统提示词)
-             setTimeout(() => {
-                triggerAIResponse();
-            }, 1000);
+            history.forEach(msg => {
+                if (msg.role === 'user') {
+                    appendMessage(msg.content, 'user');
+                } else if (msg.role === 'assistant') {
+                    appendMessage(msg.content, 'ai');
+                }
+                // system messages usually hidden
+            });
         }
     }
 
@@ -730,11 +733,14 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
 
         try {
-            // Use configured API_BASE_URL
+            // 7. 性能优化：流式传输 (Streaming)
             const response = await fetch(`${API_BASE_URL}/api/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: conversationHistory })
+                body: JSON.stringify({ 
+                    messages: ConversationState.getHistory(),
+                    stream: true // 开启流式传输
+                })
             });
 
             const loadingEl = document.getElementById('ai-loading');
@@ -745,21 +751,76 @@
                 try {
                     errorDetails = await response.json();
                 } catch (e) {
-                    // 如果解析 JSON 失败，说明返回的可能不是 JSON (比如 404 HTML 页面或空响应)
-                    // 这通常意味着后端服务未启动或路径错误
-                    throw new Error(`服务器连接失败 (Status: ${response.status})。请确认后端服务已通过 'node server.js' 启动。`);
+                    throw new Error(`服务器连接失败 (Status: ${response.status})。请确认后端服务已启动。`);
                 }
                 console.error('API Error:', errorDetails);
                 throw new Error(errorDetails.error || 'API request failed');
             }
 
-            const data = await response.json();
-            const aiText = data.choices[0].message.content;
-
-            appendMessage(aiText, 'ai');
-            conversationHistory.push({ role: 'assistant', content: aiText });
+            // 创建新的消息气泡用于流式显示
+            const div = document.createElement('div');
+            div.className = 'message flex gap-4';
+            div.innerHTML = `
+                <div class="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center text-sm shrink-0 mt-1">AI</div>
+                <div class="bg-gray-100 text-gray-700 p-4 rounded-2xl rounded-tl-none text-sm leading-relaxed" id="ai-response-content"></div>
+            `;
+            chatMessages.appendChild(div);
+            const contentDiv = div.querySelector('#ai-response-content');
             
-            // 触发语音朗读
+            // 处理流式响应
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let aiText = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.slice(6);
+                        if (jsonStr === '[DONE]') continue;
+
+                        try {
+                            const data = JSON.parse(jsonStr);
+                            if (data.choices && data.choices[0].delta && data.choices[0].delta.content) {
+                                const content = data.choices[0].delta.content;
+                                aiText += content;
+                                contentDiv.innerText = aiText; // 实时更新 UI
+                                chatMessages.scrollTop = chatMessages.scrollHeight;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing stream data:', e);
+                        }
+                    }
+                }
+            }
+            
+            // 移除临时的 id 防止重复
+            contentDiv.removeAttribute('id');
+
+            // 4. 对话状态的“持久化” (Persistence)
+            // 更新本地对话历史
+            ConversationState.addMessage('assistant', aiText);
+            
+            // 6. 响应的“确定性”控制 (Deterministic Control) - Client Side Interceptor
+            if (/[\u4e00-\u9fa5]/.test(aiText)) {
+                console.warn('[Strict Protocol] Detected Chinese in response. Triggering correction...');
+                // 发送隐藏指令 (仅添加到历史，不显示在UI气泡中，或者如果您希望显示也可以)
+                // 这里我们选择不显示在UI，只在后台纠正
+                ConversationState.addMessage('user', "Please rephrase your last response in English only. Strict Protocol #6.");
+                
+                // 递归触发修正后的回答
+                // 注意：为了避免无限循环，理论上后端 System Prompt 应该能修正。
+                // 也可以加个计数器防止死循环，但这里假设一次就能修正。
+                await triggerAIResponse();
+                return; 
+            }
+
+            // 触发语音朗读 (流式结束后一次性朗读)
             speakText(aiText);
 
         } catch (error) {
@@ -768,6 +829,7 @@
             
             console.error('AI Response Error:', error);
             
+            // 3. 异常处理与“优雅降级” (Error Handling)
             let errorMsg = error.message;
             if (errorMsg === 'Failed to fetch') {
                 errorMsg = '无法连接到服务器。请确保后端服务正在运行 (node server.js)。';
@@ -788,7 +850,7 @@
         if (!text) return;
 
         appendMessage(text, 'user');
-        conversationHistory.push({ role: 'user', content: text });
+        ConversationState.addMessage('user', text);
         chatInput.value = '';
 
         triggerAIResponse();

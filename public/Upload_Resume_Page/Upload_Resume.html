@@ -255,13 +255,13 @@
     const fileNameDisplay = document.getElementById('fileNameDisplay');
     const uploadError = document.getElementById('uploadError');
 
-    // 动态获取后端 API 地址，适配本地开发 (Live Server) 和生产环境
-    const getApiBaseUrl = () => {
-        if (window.location.protocol === 'file:') return 'http://localhost:3000';
-        if (window.location.port === '3000') return '';
-        return `http://${window.location.hostname}:3000`;
-    };
-    const API_BASE_URL = getApiBaseUrl();
+    // 动态获取后端 API 地址
+    // 如果是通过 file:// 协议或非 3000 端口（如 Live Server 5500）访问，则指向本地服务器
+    let API_BASE_URL = '';
+    if (window.location.protocol === 'file:' || (window.location.port && window.location.port !== '3000')) {
+        API_BASE_URL = 'http://localhost:3000';
+        console.log('Detected external/local access, setting API_BASE_URL to:', API_BASE_URL);
+    }
 
     let currentResumeFile = null;
 

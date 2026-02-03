@@ -1,4 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // 动态获取后端 API 地址
+    let API_BASE_URL = '';
+    if (window.location.protocol === 'file:' || (window.location.port && window.location.port !== '3000')) {
+        API_BASE_URL = 'http://localhost:3000';
+    }
+
     const path = window.location.pathname;
     // Since we are in the admin folder now:
     // index.html is the login page
@@ -20,21 +26,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const errorMessage = document.getElementById('errorMessage');
 
         if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
+            loginForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 
                 const username = loginForm.username.value;
                 const password = loginForm.password.value;
 
-                // MOCK AUTHENTICATION
-                if (username === 'admin' && password === 'admin123') {
-                    localStorage.setItem('isLoggedIn', 'true');
-                    localStorage.setItem('user', username);
-                    window.location.href = 'dashboard.html';
-                } else {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/admin/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok && data.success) {
+                        localStorage.setItem('isLoggedIn', 'true');
+                        localStorage.setItem('user', data.user);
+                        window.location.href = 'dashboard.html';
+                    } else {
+                        errorMessage.textContent = data.error || '登录失败';
+                        errorMessage.classList.remove('hidden');
+                        loginForm.classList.add('animate-pulse');
+                        setTimeout(() => loginForm.classList.remove('animate-pulse'), 500);
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    errorMessage.textContent = '服务器错误，请稍后重试';
                     errorMessage.classList.remove('hidden');
-                    loginForm.classList.add('animate-pulse');
-                    setTimeout(() => loginForm.classList.remove('animate-pulse'), 500);
                 }
             });
         }

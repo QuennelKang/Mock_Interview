@@ -19,6 +19,25 @@ app.use(bodyParser.json({ limit: '50mb' })); // Increase limit for large resume 
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// --- Admin Auth Route ---
+app.post('/api/admin/login', (req, res) => {
+    const { username, password } = req.body;
+    const adminUser = process.env.ADMIN_USERNAME;
+    const adminPass = process.env.ADMIN_PASSWORD;
+
+    if (!adminUser || !adminPass) {
+        console.error('Admin credentials not configured in .env');
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    if (username === adminUser && password === adminPass) {
+        // In a real app, generate a JWT token here
+        return res.json({ success: true, user: username });
+    } else {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+});
+
 // Chat API Route
 app.post('/api/chat', async (req, res) => {
     const { messages, stream = false } = req.body;

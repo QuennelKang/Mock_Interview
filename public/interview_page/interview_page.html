@@ -373,6 +373,12 @@
         
         if (!isRecording) {
             try {
+                // 1. 确保麦克风已开启 (如果未开启则自动开启)
+                const s = await ensureStream();
+                if (!s.getAudioTracks()[0].enabled) {
+                    await toggleMic();
+                }
+
                 const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
                 const micStream = await ensureStream();
                 
@@ -418,7 +424,11 @@
     }
 
     setInterval(() => {
-        document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false });
+        document.getElementById('clock').innerText = `${dateStr} ${timeStr}`;
+        
         document.getElementById('m-timer').innerText = "会议: " + formatTime(Date.now() - startTime);
         if (isRecording && recStartTime > 0) {
             document.getElementById('r-timer').innerText = formatTime(Date.now() - recStartTime);

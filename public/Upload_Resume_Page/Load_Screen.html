@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>正在准备面试 | Mock.Munchies</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        .serif { font-family: 'Playfair+Display', serif; }
+        
+        .bg-blur-image {
+            background-image: url('https://images.unsplash.com/photo-1497032628192-86f99bcd76bc?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            filter: grayscale(100%) brightness(0.9);
+        }
+
+        /* 进度条动画平滑处理 */
+        #progress-bar {
+            transition: width 0.4s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+        }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fau { animation: fade-in-up 0.8s ease-out forwards; }
+
+        .btn-munchies {
+            background-color: #7f1d1d; /* red-900 */
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .btn-munchies:hover {
+            background-color: #991b1b; /* red-800 */
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-white h-screen flex flex-col items-center justify-center overflow-hidden antialiased">
+
+    <div class="fixed inset-0 -z-10 bg-blur-image opacity-10"></div>
+
+    <div class="max-w-xl w-full px-8 text-center">
+        <div class="text-xl font-bold tracking-tighter serif mb-16 animate-fau">
+            Mock<span class="text-gray-400">.</span>Munchies
+        </div>
+
+        <div class="mb-4 flex justify-between items-end animate-fau" style="animation-delay: 0.2s;">
+            <span class="text-xs uppercase tracking-[0.3em] text-gray-400 font-bold" id="status-text">正在初始化 AI 面试官</span>
+            <span class="text-2xl serif italic text-red-900" id="percent-text">0%</span>
+        </div>
+
+        <div class="w-full h-[2px] bg-gray-100 mb-12 relative overflow-hidden animate-fau" style="animation-delay: 0.3s;">
+            <div id="progress-bar" class="absolute top-0 left-0 h-full bg-black w-0"></div>
+        </div>
+
+        <div class="h-20 animate-fau" style="animation-delay: 0.5s;">
+            <p id="quote-text" class="text-gray-500 text-lg font-light italic leading-relaxed">
+                “优秀的面试不是完美的表演，而是真诚的沟通。”
+            </p>
+            <p id="sub-quote" class="text-gray-300 text-xs uppercase tracking-widest mt-4 font-medium">
+                —— 职场箴言
+            </p>
+        </div>
+
+        <!-- Click to continue area -->
+        <div id="continue-area" class="mt-8 hidden animate-fau">
+            <button id="enter-btn" class="btn-munchies">
+                点击进入面试房间 →
+            </button>
+            <p class="text-gray-400 text-xs mt-3 uppercase tracking-widest">System Ready</p>
+        </div>
+    </div>
+
+    <div class="fixed bottom-12 text-[10px] text-gray-300 uppercase tracking-[0.5em] animate-pulse">
+        System Calibrating...
+    </div>
+
+    <script>
+        const quotes = [
+            { text: "“每一个问题都是展示你逻辑思维的机会。”", sub: "面试技巧" },
+            { text: "“不要害怕沉默，思考过后的回答更有分量。”", sub: "职场心理" },
+            { text: "“简历决定了你的下限，而表达决定了你的上限。”", sub: "职业进阶" },
+            { text: "“Java 开发者不仅是在写代码，更是在构建解决问题的架构。”", sub: "技术洞察" },
+            { text: "“产品经理的内核，是对手感与数据的双重尊重。”", sub: "行业思考" },
+            { text: "“自信不是因为你无所不知，而是因为你无所畏惧。”", sub: "心态建设" }
+        ];
+
+        const statusMessages = [
+            "正在加载岗位模型...",
+            "正在配置面试实验室...",
+            "正在生成行业核心考点...",
+            "AI 助手已就绪..."
+        ];
+
+        let progress = 0;
+        const progressBar = document.getElementById('progress-bar');
+        const percentText = document.getElementById('percent-text');
+        const quoteText = document.getElementById('quote-text');
+        const subQuote = document.getElementById('sub-quote');
+        const statusText = document.getElementById('status-text');
+        const continueArea = document.getElementById('continue-area');
+        const enterBtn = document.getElementById('enter-btn');
+
+        // 控制加载时间在 3-5 秒之间
+        const duration = Math.floor(Math.random() * 2000) + 3000; // 3000ms - 5000ms
+        const startTime = Date.now();
+        const updateInterval = 50; // 更新频率 50ms
+
+        const interval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            progress = Math.min((elapsed / duration) * 100, 100);
+            
+            // 更新 UI
+            progressBar.style.width = progress + '%';
+            percentText.innerText = Math.floor(progress) + '%';
+
+            // 随着进度切换提示词
+            if (progress > 30 && progress < 35) {
+                updateContent(1, 1);
+            } else if (progress > 65 && progress < 70) {
+                updateContent(2, 2);
+            }
+
+            if (progress >= 100) {
+                clearInterval(interval);
+                // 加载完成，显示进入按钮
+                statusText.innerText = statusMessages[3]; // AI 助手已就绪...
+                showEnterButton();
+            }
+        }, updateInterval);
+
+        function updateContent(quoteIdx, statusIdx) {
+            quoteText.style.opacity = 0;
+            setTimeout(() => {
+                quoteText.innerText = quotes[quoteIdx].text;
+                subQuote.innerText = "—— " + quotes[quoteIdx].sub;
+                statusText.innerText = statusMessages[statusIdx];
+                quoteText.style.opacity = 1;
+            }, 300);
+        }
+
+        function showEnterButton() {
+            continueArea.classList.remove('hidden');
+            
+            const goToInterview = () => {
+                window.location.href = "../interview_page/interview_page.html";
+            };
+
+            // 绑定按钮点击
+            enterBtn.onclick = goToInterview;
+
+            // 绑定任意键
+            const keyHandler = (e) => {
+                goToInterview();
+                document.removeEventListener('keydown', keyHandler);
+            };
+            document.addEventListener('keydown', keyHandler);
+        }
+    </script>
+</body>
+</html>

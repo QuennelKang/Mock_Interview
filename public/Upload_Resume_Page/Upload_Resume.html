@@ -21,6 +21,29 @@
     <style>
         /* 复用 main_page.html 风格的补充样式 */
         .serif { font-family: 'Times New Roman', Times, serif; }
+
+        /* Load Screen Styles Integration */
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        .ls-serif { font-family: 'Playfair+Display', serif; }
+        
+        .bg-blur-image {
+            background-image: url('https://images.unsplash.com/photo-1497032628192-86f99bcd76bc?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            filter: grayscale(100%) brightness(0.9);
+        }
+
+        /* 进度条动画平滑处理 */
+        #progress-bar {
+            transition: width 0.4s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+        }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fau { animation: fade-in-up 0.8s ease-out forwards; }
+
         .btn-munchies {
             background-color: black;
             color: white;
@@ -236,6 +259,47 @@
             <h3 id="modalTitle" class="text-xl font-bold mb-2 serif"></h3>
             <div id="modalContent" class="text-gray-600 mb-6 text-sm leading-relaxed whitespace-pre-line"></div>
             <button onclick="closeModal()" class="w-full btn-munchies justify-center">我知道了</button>
+        </div>
+    </div>
+
+    <!-- Load Screen Section (Hidden by default, used for processing state) -->
+    <div id="loadScreenSection" class="fixed inset-0 z-[10000] bg-white hidden flex-col items-center justify-center overflow-hidden antialiased">
+        <div class="fixed inset-0 -z-10 bg-blur-image opacity-10"></div>
+
+        <div class="max-w-xl w-full px-8 text-center">
+            <div class="text-xl font-bold tracking-tighter ls-serif mb-16 animate-fau">
+                Mock<span class="text-gray-400">.</span>Munchies
+            </div>
+    
+            <div class="mb-4 flex justify-between items-end animate-fau" style="animation-delay: 0.2s;">
+                <span class="text-xs uppercase tracking-[0.3em] text-gray-400 font-bold" id="ls-status-text">正在初始化 AI 面试官</span>
+                <span class="text-2xl ls-serif italic text-red-900" id="ls-percent-text">0%</span>
+            </div>
+    
+            <div class="w-full h-[2px] bg-gray-100 mb-12 relative overflow-hidden animate-fau" style="animation-delay: 0.3s;">
+                <div id="ls-progress-bar" class="absolute top-0 left-0 h-full bg-black w-0"></div>
+            </div>
+    
+            <div class="h-20 animate-fau" style="animation-delay: 0.5s;">
+                <p id="ls-quote-text" class="text-gray-500 text-lg font-light italic leading-relaxed">
+                    “优秀的面试不是完美的表演，而是真诚的沟通。”
+                </p>
+                <p id="ls-sub-quote" class="text-gray-300 text-xs uppercase tracking-widest mt-4 font-medium">
+                    —— 职场箴言
+                </p>
+            </div>
+
+            <!-- Click to continue area -->
+            <div id="ls-continue-area" class="mt-8 hidden animate-fau">
+                <button id="ls-enter-btn" class="btn-munchies bg-red-900 hover:bg-red-800 text-white px-8 py-3 rounded-full shadow-lg transform hover:scale-105 transition-all">
+                    点击进入面试房间 →
+                </button>
+                <p class="text-gray-400 text-xs mt-3 uppercase tracking-widest">System Ready</p>
+            </div>
+        </div>
+    
+        <div class="fixed bottom-12 text-[10px] text-gray-300 uppercase tracking-[0.5em] animate-pulse">
+            System Calibrating...
         </div>
     </div>
 
@@ -752,11 +816,27 @@
             return;
         }
 
-        // 显示正在处理
-        showModal('正在处理', '正在解析文件并打包数据，请稍候...', 'info');
+        // 显示正在处理 (切换到 Load Screen)
+        // showModal('正在处理', '正在解析文件并打包数据，请稍候...', 'info');
+        activateLoadScreen();
 
         // 提取文件内容
-        const fileContent = await extractFileText(file);
+        // 增加人为延迟，确保动画流畅展示 (控制在 3-5 秒之间)
+        const minDuration = 3000;
+        const maxDuration = 5000;
+        const randomDuration = Math.floor(Math.random() * (maxDuration - minDuration + 1)) + minDuration;
+        const delayPromise = new Promise(resolve => setTimeout(resolve, randomDuration));
+        
+        let fileContent = '';
+        try {
+             fileContent = await extractFileText(file);
+             updateLoadScreenProgress(40, "正在生成行业核心考点...");
+        } catch (err) {
+            console.error(err);
+            // 这里可以处理错误，暂时忽略，会在 prompt 生成步骤报错
+        }
+
+        await delayPromise;
 
         // 模拟保存
         const formData = {
@@ -768,22 +848,10 @@
             jobRequirements: document.getElementById('jobReq').value.trim()
         };
 
-        // 关闭处理中弹窗（为了展示成功弹窗，其实可以直接覆盖）
-        
+        updateLoadScreenProgress(70, "正在配置面试实验室...");
+
         console.log('%c✅ 保存成功 - 数据详情:', 'color: green; font-weight: bold; font-size: 14px;');
-        console.log('--------------------------------');
-        console.log('📂 简历文件:', file.name, `(${Math.round(file.size/1024)} KB, ${file.type})`);
-        console.log('📄 简历内容预览 (Top 5 Pages):');
-        console.log('%c' + (fileContent.length > 500 ? fileContent.substring(0, 500) + '...' : fileContent), 'color: #555; font-style: italic;');
-        console.log('--------------------------------');
-        console.log('🏢 公司名称:', formData.company || '(未填写)');
-        console.log('📝 职位名称:', formData.position);
-        console.log('📄 公司简介:', formData.companyDescription || '(未填写)');
-        console.log('📋 职位描述:', formData.jobDescription);
-        console.log('🎯 职位要求:', formData.jobRequirements || '(未填写)');
-        console.log('--------------------------------');
-        console.log('完整数据对象:', formData);
-        console.log('完整简历文本:', fileContent);
+        // ... (logs removed for brevity) ...
 
         try {
             // 调用后端 API 生成 System Prompt
@@ -812,6 +880,8 @@
             const data = await response.json();
             const systemPrompt = data.systemPrompt;
 
+            updateLoadScreenProgress(100, "AI 助手已就绪...");
+
             // 保存 Prompt 到 localStorage 供 interview_page.html 使用
             localStorage.setItem('interview_system_prompt', systemPrompt);
             // 保存用户简历数据以备不时之需
@@ -820,14 +890,72 @@
             // 清除旧的对话历史，确保开始新的面试会话
             localStorage.removeItem('mock_interview_history');
 
-            showModal('保存成功', '您的信息已上传至后台，AI 面试官正在准备...', 'success', () => {
-                window.location.href = '../interview_page/interview_page.html';
-            });
+            // 完成，显示点击进入
+            showEnterButton();
+
         } catch (error) {
             console.error('Error in prompt generation:', error);
+            // 如果出错，隐藏 Load Screen，显示错误 Modal
+            document.getElementById('loadScreenSection').classList.add('hidden');
+            document.body.style.overflow = '';
             showModal('保存失败', '生成面试数据时出错，请重试。\n' + error.message, 'error');
         }
     }
+
+    // Load Screen Logic
+    const lsQuotes = [
+        { text: "“每一个问题都是展示你逻辑思维的机会。”", sub: "面试技巧" },
+        { text: "“不要害怕沉默，思考过后的回答更有分量。”", sub: "职场心理" },
+        { text: "“简历决定了你的下限，而表达决定了你的上限。”", sub: "职业进阶" },
+        { text: "“Java 开发者不仅是在写代码，更是在构建解决问题的架构。”", sub: "技术洞察" },
+        { text: "“产品经理的内核，是对手感与数据的双重尊重。”", sub: "行业思考" },
+        { text: "“自信不是因为你无所不知，而是因为你无所畏惧。”", sub: "心态建设" }
+    ];
+
+    function activateLoadScreen() {
+        const ls = document.getElementById('loadScreenSection');
+        ls.classList.remove('hidden');
+        ls.classList.add('flex');
+        document.body.style.overflow = 'hidden'; // 禁止滚动
+        
+        // Reset state
+        updateLoadScreenProgress(5, "正在加载岗位模型...");
+        document.getElementById('ls-continue-area').classList.add('hidden');
+        
+        // Random quote
+        const randomQ = lsQuotes[Math.floor(Math.random() * lsQuotes.length)];
+        document.getElementById('ls-quote-text').innerText = randomQ.text;
+        document.getElementById('ls-sub-quote').innerText = "—— " + randomQ.sub;
+    }
+
+    function updateLoadScreenProgress(percent, statusMsg) {
+        document.getElementById('ls-progress-bar').style.width = percent + '%';
+        document.getElementById('ls-percent-text').innerText = percent + '%';
+        if (statusMsg) {
+            document.getElementById('ls-status-text').innerText = statusMsg;
+        }
+    }
+
+    function showEnterButton() {
+        const continueArea = document.getElementById('ls-continue-area');
+        continueArea.classList.remove('hidden');
+        
+        // 绑定点击事件
+        const enterBtn = document.getElementById('ls-enter-btn');
+        const handler = () => {
+             window.location.href = '../interview_page/interview_page.html';
+        };
+        
+        enterBtn.onclick = handler;
+        
+        // 绑定任意键
+        const keyHandler = (e) => {
+            window.location.href = '../interview_page/interview_page.html';
+            document.removeEventListener('keydown', keyHandler);
+        };
+        document.addEventListener('keydown', keyHandler);
+    }
+
 </script>
 </body>
 </html>

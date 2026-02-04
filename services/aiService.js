@@ -182,17 +182,19 @@ If a field is not found, use an empty string. Do not include any markdown format
             "Hypothetical / Situational Questions"
         ];
         
-        // Fisher-Yates shuffle
+        // Fisher-Yates shuffle to randomize the middle stages
         for (let i = middleStages.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [middleStages[i], middleStages[j]] = [middleStages[j], middleStages[i]];
         }
         
+        console.log('[AIService] Generated Interview Stages:', middleStages);
+
         const interviewStagesList = [
             "Self-introduction",
             ...middleStages,
             "Your Questions for the Interviewer"
-        ].map(stage => `           - ${stage}`).join('\n');
+        ].map((stage, index) => `           ${index + 1}. ${stage}`).join('\n');
 
         const systemPrompt = `
         Background: 
@@ -205,14 +207,14 @@ If a field is not found, use an empty string. Do not include any markdown format
         Task: You are a high-level ${formData.position} Hiring Manager. Conduct a rigorous mock interview.
 
         Strict Protocol:
-        1. FIRST RESPONSE: Start ONLY with "Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, [First Question]". No meta-talk.
-        2. SUBSEQUENT RESPONSES: Provide 1-2 sentences of professional feedback on the previous answer (e.g., "Clear explanation of the architecture, though I'd like to see more focus on the 'why'."), then ask exactly ONE follow-up question.Vary the feedback phrasing to keep the conversation natural; avoid repetitive templates.
-        3. RESUME ANCHORING: Every question must link a requirement from the JD to a specific project or skill mentioned in the candidate's resume. Do not invent scenarios outside their provided experience.
-        4. DRILL DOWN: If an answer is high-level, the next question must demand specific metrics, technologies used, or "lessons learned" from that specific resume entry.
-        5. INTERVIEW STAGES: The interview must progress through these distinct stages:
+        1. FIRST RESPONSE: Start ONLY with "Hello! I am [Interviewer Name], your interviewer today. ${timeGreeting}, I've reviewed your resume. [REPHRASE POLITELY: ask the candidate to introduce themselves].. No meta-talk.
+        2. SUBSEQUENT RESPONSES: Provide 1-2 sentences of professional feedback on the previous answer, then ask exactly ONE follow-up question.
+        3. RESUME ANCHORING: Every question must link a requirement from the JD to a specific project or skill mentioned in the candidate's resume.
+        4. DRILL DOWN: If an answer is high-level, the next question must demand specific metrics, technologies used, or "lessons learned".
+        5. INTERVIEW STAGES: The interview must progress through these distinct stages STRICTLY IN ORDER:
 ${interviewStagesList}
-        When transitioning between stages, use a natural transitional phrase (e.g., "Moving on from your ${formData.position} background, I'd like to discuss...").
-        6. LANGUAGE: Use professional, natural English only. If the candidate's resume or JD contains non-English proper nouns (like company names), TRANSLATE them into English in your response. Do not repeat the question. No Markdown formatting, no code blocks, no Chinese.
+        (Do not skip "Self-introduction". Once a stage is satisfactorily covered, move to the next one using a natural transition.)
+        6. LANGUAGE: Use professional, natural English only. If the candidate's resume or JD contains non-English proper nouns (like company names), TRANSLATE them into English in your response. Do not repeat the question. No Markdown formatting, no code blocks, only English.
 
         Begin the interview now.
         `;

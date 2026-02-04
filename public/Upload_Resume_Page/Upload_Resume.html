@@ -912,6 +912,9 @@
         { text: "“自信不是因为你无所不知，而是因为你无所畏惧。”", sub: "心态建设" }
     ];
 
+    let lsProgress = 0;
+    let lsInterval = null;
+
     function activateLoadScreen() {
         const ls = document.getElementById('loadScreenSection');
         ls.classList.remove('hidden');
@@ -919,18 +922,58 @@
         document.body.style.overflow = 'hidden'; // 禁止滚动
         
         // Reset state
-        updateLoadScreenProgress(5, "正在加载岗位模型...");
+        lsProgress = 0;
+        updateLoadScreenProgress(0, "正在加载岗位模型...");
         document.getElementById('ls-continue-area').classList.add('hidden');
         
         // Random quote
         const randomQ = lsQuotes[Math.floor(Math.random() * lsQuotes.length)];
         document.getElementById('ls-quote-text').innerText = randomQ.text;
         document.getElementById('ls-sub-quote').innerText = "—— " + randomQ.sub;
+
+        // 启动随机进度模拟 (Auto Progress)
+        startAutoProgress();
     }
 
-    function updateLoadScreenProgress(percent, statusMsg) {
+    function startAutoProgress() {
+        if (lsInterval) clearInterval(lsInterval);
+        
+        lsInterval = setInterval(() => {
+            // 随机增量 0.2% - 1.5%
+            const increment = Math.random() * 1.3 + 0.2;
+            lsProgress += increment;
+            
+            // 限制最大自动进度为 95% (剩下的 5% 由完成事件触发)
+            if (lsProgress > 95) {
+                lsProgress = 95;
+            }
+            
+            updateLoadScreenUI(lsProgress);
+        }, 100); // 每 100ms 更新一次
+    }
+
+    // 仅更新 UI，不重置逻辑
+    function updateLoadScreenUI(percent) {
         document.getElementById('ls-progress-bar').style.width = percent + '%';
-        document.getElementById('ls-percent-text').innerText = percent + '%';
+        document.getElementById('ls-percent-text').innerText = Math.floor(percent) + '%';
+    }
+
+    // 外部调用更新进度 (设置新的基准点)
+    function updateLoadScreenProgress(percent, statusMsg) {
+        // 如果当前自动进度已经超过了传入的 percent，则不回退，只更新文字
+        // 除非是 100 (完成)
+        if (percent === 100) {
+            if (lsInterval) clearInterval(lsInterval);
+            lsProgress = 100;
+        } else {
+            // 如果传入的进度比当前大，跳跃到该进度
+            if (percent > lsProgress) {
+                lsProgress = percent;
+            }
+        }
+
+        updateLoadScreenUI(lsProgress);
+        
         if (statusMsg) {
             document.getElementById('ls-status-text').innerText = statusMsg;
         }

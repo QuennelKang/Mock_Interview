@@ -111,14 +111,43 @@
         const continueArea = document.getElementById('continue-area');
         const enterBtn = document.getElementById('enter-btn');
 
-        // 控制加载时间在 3-5 秒之间
+        // 控制加载时间在 3-5 秒之间，使用随机增量模拟
         const duration = Math.floor(Math.random() * 2000) + 3000; // 3000ms - 5000ms
         const startTime = Date.now();
-        const updateInterval = 50; // 更新频率 50ms
+        const updateInterval = 100; // 降低频率以配合随机增量
 
         const interval = setInterval(() => {
             const elapsed = Date.now() - startTime;
-            progress = Math.min((elapsed / duration) * 100, 100);
+            
+            // 计算理想进度
+            const idealProgress = Math.min((elapsed / duration) * 100, 100);
+            
+            // 在理想进度基础上增加随机波动，但保证单调递增
+            // 每次增量 = 理想进度差值 * 随机系数
+            // 或者简单点：如果当前进度落后于理想进度，就随机追赶
+            
+            // 简单随机增量逻辑：
+            // 每次随机增加 0.5% - 3%
+            // 同时受限于总时长，如果时间快到了，加速；时间充裕，减速
+            
+            // 这里我们采用 "目标导向 + 随机扰动" 的策略
+            // 基础目标是 idealProgress
+            // 我们让 progress 随机逼近 idealProgress
+            
+            let increment = Math.random() * 3; // 随机增量 0-3%
+            
+            // 如果时间过半但进度落后太多，加速
+            if (idealProgress > 50 && progress < 40) increment += 2;
+            if (idealProgress > 90 && progress < 80) increment += 5;
+            
+            progress += increment;
+            
+            // 封顶逻辑：如果时间没到，限制在 99%
+            if (elapsed < duration && progress > 99) {
+                progress = 99;
+            } else if (elapsed >= duration) {
+                progress = 100;
+            }
             
             // 更新 UI
             progressBar.style.width = progress + '%';

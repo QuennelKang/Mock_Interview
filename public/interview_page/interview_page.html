@@ -162,7 +162,8 @@
         </div>
 
         <!-- 聊天/侧边栏区域 -->
-        <aside id="chatSidebar" class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10">
+        <aside id="chatSidebar" class="w-96 bg-white border-l border-gray-100 flex flex-col shrink-0 shadow-[0_0_40px_-10px_rgba(0,0,0,0.05)] z-10 relative">
+            <div id="chatBlurMask" class="absolute inset-0 z-50 backdrop-blur-md bg-white/50 hidden transition-all duration-300"></div>
             <div class="h-16 border-b border-gray-50 flex items-center justify-between px-6">
                 <div class="flex items-center gap-3">
                     <div class="w-2 h-2 rounded-full bg-green-500"></div>
@@ -301,16 +302,16 @@
     }
 
     function toggleChat() {
-        const chatSidebar = document.getElementById('chatSidebar');
+        const chatBlurMask = document.getElementById('chatBlurMask');
         const btn = document.getElementById('btn-chat-toggle');
         
-        if (chatSidebar.classList.contains('hidden')) {
-            chatSidebar.classList.remove('hidden');
-            chatSidebar.classList.add('flex');
+        if (!chatBlurMask.classList.contains('hidden')) {
+            // 当前是隐藏（模糊）状态，点击后显示（移除模糊）
+            chatBlurMask.classList.add('hidden');
             btn.classList.add('active');
         } else {
-            chatSidebar.classList.remove('flex');
-            chatSidebar.classList.add('hidden');
+            // 当前是显示状态，点击后隐藏（添加模糊）
+            chatBlurMask.classList.remove('hidden');
             btn.classList.remove('active');
         }
     }
@@ -827,7 +828,7 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    async function triggerAIResponse() {
+    async function triggerAIResponse(overrideMessages = null) {
         // Show loading state
         const loadingDiv = document.createElement('div');
         loadingDiv.id = 'ai-loading';
@@ -847,7 +848,7 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    messages: ConversationState.getHistory(),
+                    messages: overrideMessages || ConversationState.getHistory(),
                     stream: true // 开启流式传输
                 })
             });
@@ -911,23 +912,29 @@
             // 移除临时的 id 防止重复
             contentDiv.removeAttribute('id');
 
-            // 4. 对话状态的“持久化” (Persistence)
-            // 更新本地对话历史
-            ConversationState.addMessage('assistant', aiText);
-            
             // 6. 响应的“确定性”控制 (Deterministic Control) - Client Side Interceptor
             if (/[\u4e00-\u9fa5]/.test(aiText)) {
                 console.warn('[Strict Protocol] Detected Chinese in response. Triggering correction...');
-                // 发送隐藏指令 (仅添加到历史，不显示在UI气泡中，或者如果您希望显示也可以)
-                // 这里我们选择不显示在UI，只在后台纠正
-                ConversationState.addMessage('user', "Please rephrase your last response in English only. Strict Protocol #6.");
                 
-                // 递归触发修正后的回答
-                // 注意：为了避免无限循环，理论上后端 System Prompt 应该能修正。
-                // 也可以加个计数器防止死循环，但这里假设一次就能修正。
-                await triggerAIResponse();
+                // 1. 立即从 UI 中移除包含中文的错误气泡
+                div.remove();
+
+                // 2. 构造临时消息历史（不保存到 ConversationState）
+                // 包含：当前历史 + 错误的 AI 回复 + 用户的纠正指令
+                const tempMessages = [
+                    ...ConversationState.getHistory(), 
+                    { role: 'assistant', content: aiText },
+                    { role: 'user', content: "Please rephrase your last response in English only. Translate any proper nouns (like company names) to English. Strict Protocol #6." }
+                ];
+                
+                // 3. 递归触发修正后的回答，传入临时消息历史
+                await triggerAIResponse(tempMessages);
                 return; 
             }
+
+            // 4. 对话状态的“持久化” (Persistence)
+            // 只有当回复通过了中文检测后，才保存到历史记录
+            ConversationState.addMessage('assistant', aiText);
 
             // 触发语音朗读 (流式结束后一次性朗读)
             speakText(aiText);

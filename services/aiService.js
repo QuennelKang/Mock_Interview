@@ -212,7 +212,7 @@ If a field is not found, use an empty string. Do not include any markdown format
         5. INTERVIEW STAGES: The interview must progress through these distinct stages:
 ${interviewStagesList}
         When transitioning between stages, use a natural transitional phrase (e.g., "Moving on from your ${formData.position} background, I'd like to discuss...").
-        6. LANGUAGE: Use professional, natural English only. No Markdown formatting, no code blocks, no Chinese.
+        6. LANGUAGE: Use professional, natural English only. If the candidate's resume or JD contains non-English proper nouns (like company names), TRANSLATE them into English in your response. Do not repeat the question. No Markdown formatting, no code blocks, no Chinese.
 
         Begin the interview now.
         `;

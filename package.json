@@ -2,9 +2,9 @@
   "name": "mock-munchies",
   "version": "1.0.0",
   "description": "Mock Interview Website",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "axios": "^1.13.4",

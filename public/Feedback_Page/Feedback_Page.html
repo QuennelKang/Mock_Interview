@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>意见反馈 | Munchies Interview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        .serif { font-family: 'Playfair Display', serif; }
+        .bg-blur-image {
+            background-image: url('https://images.unsplash.com/photo-1497032628192-86f99bcd76bc?q=80&w=2070&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+            filter: grayscale(100%) brightness(0.9);
+        }
+
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fau { animation: fade-in-up 0.8s ease-out forwards; }
+
+        .form-input {
+            border: none;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0.75rem 0;
+            width: 100%;
+            transition: all 0.3s;
+            outline: none;
+            background: transparent;
+        }
+        .form-input:focus {
+            border-bottom-color: #7f1d1d; /* red-900 */
+        }
+
+        .btn-munchies {
+            background-color: #7f1d1d;
+            color: white;
+            padding: 0.75rem 2.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .btn-munchies:hover {
+            background-color: #991b1b;
+            transform: scale(1.02);
+        }
+
+        /* 标签页切换样式 */
+        .type-tag {
+            cursor: pointer;
+            padding: 0.4rem 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+            color: #9ca3af;
+        }
+        .type-tag.active {
+            background-color: #000;
+            color: #fff;
+            border-color: #000;
+        }
+    </style>
+</head>
+<body class="bg-white min-h-screen flex flex-col items-center justify-center antialiased p-6">
+
+    <div class="fixed inset-0 -z-10 bg-blur-image opacity-10"></div>
+
+    <div class="max-w-2xl w-full animate-fau">
+        <div class="text-center mb-12">
+            <div class="text-xl font-bold tracking-tighter serif mb-4">
+                Mock<span class="text-gray-400">.</span>Munchies
+            </div>
+            <h1 class="text-3xl serif italic text-gray-800">聆听你的声音</h1>
+            <p class="text-gray-400 text-xs uppercase tracking-[0.3em] mt-3">Feedback & Suggestions</p>
+        </div>
+
+        <div class="bg-white/50 backdrop-blur-sm border border-gray-100 p-8 md:p-12 shadow-2xl rounded-sm">
+            <form id="feedback-form">
+                <div class="mb-8">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-4">反馈类型</label>
+                    <div class="flex flex-wrap gap-3" id="type-container">
+                        <span class="type-tag active" onclick="selectType(this)">产品建议</span>
+                        <span class="type-tag" onclick="selectType(this)">技术漏洞</span>
+                        <span class="type-tag" onclick="selectType(this)">内容缺失</span>
+                        <span class="type-tag" onclick="selectType(this)">其他</span>
+                    </div>
+                </div>
+
+                <div class="mb-8">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-2">详细描述</label>
+                    <textarea 
+                        class="form-input min-h-[120px] resize-none" 
+                        placeholder="告诉我们你在这里的体验，或是你期待的新功能..."
+                        required
+                    ></textarea>
+                </div>
+
+                <div class="mb-12">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-2">联系方式 (可选)</label>
+                    <input type="email" class="form-input" placeholder="Email Address">
+                </div>
+
+                <div class="flex flex-col items-center">
+                    <button type="submit" class="btn-munchies mb-4">
+                        发送反馈 →
+                    </button>
+                    <a href="../index.html" class="text-gray-400 text-[10px] uppercase tracking-widest hover:text-black transition-colors">
+                        返回主页
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <div id="success-msg" class="hidden text-center py-20">
+            <div class="text-5xl mb-6">✉️</div>
+            <h2 class="serif italic text-2xl text-red-900 mb-2">感谢你的反馈</h2>
+            <p class="text-gray-500 font-light">我们会仔细阅读每一份建议，不断完善 Munchies Interview< 的面试体验。</p>
+            <button onclick="resetForm()" class="mt-8 text-gray-400 text-[10px] uppercase tracking-widest border-b border-gray-200 pb-1">再次提交</button>
+        </div>
+    </div>
+
+    <div class="fixed bottom-12 text-[10px] text-gray-300 uppercase tracking-[0.5em]">
+        Connection · Empathy · Growth
+    </div>
+
+    <script>
+        function selectType(element) {
+            // 移除所有激活状态
+            document.querySelectorAll('.type-tag').forEach(tag => {
+                tag.classList.remove('active');
+            });
+            // 添加当前激活状态
+            element.classList.add('active');
+        }
+
+        const form = document.getElementById('feedback-form');
+        const successMsg = document.getElementById('success-msg');
+
+        function resetForm() {
+            successMsg.classList.add('hidden');
+            form.classList.remove('hidden');
+            form.classList.add('animate-fau');
+        }
+
+        form.onsubmit = (e) => {
+            e.preventDefault();
+            
+            // 获取表单数据
+            const activeType = document.querySelector('.type-tag.active').innerText;
+            const description = form.querySelector('textarea').value;
+            const email = form.querySelector('input[type="email"]').value;
+
+            console.log('Feedback Submitted:', {
+                type: activeType,
+                description: description,
+                email: email,
+                timestamp: new Date().toISOString()
+            });
+
+            // 模拟提交动画
+            const btn = form.querySelector('button');
+            const originalText = btn.innerText;
+            btn.innerText = "正在发送...";
+            btn.style.opacity = "0.7";
+            btn.disabled = true;
+
+            setTimeout(() => {
+                form.classList.add('hidden');
+                successMsg.classList.remove('hidden');
+                successMsg.classList.add('animate-fau');
+                
+                // 重置表单 (以便再次提交)
+                form.reset();
+                btn.innerText = originalText;
+                btn.style.opacity = "1";
+                btn.disabled = false;
+            }, 1500);
+        };
+    </script>
+</body>
+</html>

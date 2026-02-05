@@ -149,7 +149,7 @@
             form.classList.add('animate-fau');
         }
 
-        form.onsubmit = (e) => {
+        form.onsubmit = async (e) => {
             e.preventDefault();
             
             // 获取表单数据
@@ -157,31 +157,52 @@
             const description = form.querySelector('textarea').value;
             const email = form.querySelector('input[type="email"]').value;
 
-            console.log('Feedback Submitted:', {
-                type: activeType,
-                description: description,
-                email: email,
-                timestamp: new Date().toISOString()
-            });
-
-            // 模拟提交动画
+            // 提交动画
             const btn = form.querySelector('button');
             const originalText = btn.innerText;
             btn.innerText = "正在发送...";
             btn.style.opacity = "0.7";
             btn.disabled = true;
 
-            setTimeout(() => {
-                form.classList.add('hidden');
-                successMsg.classList.remove('hidden');
-                successMsg.classList.add('animate-fau');
+            try {
+                const response = await fetch('/api/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: activeType,
+                        description: description,
+                        email: email
+                    })
+                });
                 
-                // 重置表单 (以便再次提交)
-                form.reset();
+                const result = await response.json();
+                
+                if (result.success) {
+                    form.classList.add('hidden');
+                    successMsg.classList.remove('hidden');
+                    successMsg.classList.add('animate-fau');
+                    form.reset();
+                    // 恢复按钮状态（虽然表单隐藏了，但重置好习惯）
+                    btn.innerText = originalText;
+                    btn.style.opacity = "1";
+                    btn.disabled = false;
+                } else {
+                    alert('发送失败: ' + (result.error || '未知错误'));
+                    // 恢复按钮
+                    btn.innerText = originalText;
+                    btn.style.opacity = "1";
+                    btn.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                alert('网络错误，请稍后再试');
+                // 恢复按钮
                 btn.innerText = originalText;
                 btn.style.opacity = "1";
                 btn.disabled = false;
-            }, 1500);
+            }
         };
     </script>
 </body>

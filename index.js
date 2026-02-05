@@ -5,6 +5,7 @@ require('dotenv').config();
 const cors = require('cors'); // Added CORS support
 const axios = require('axios');
 const https = require('https');
+const nodemailer = require('nodemailer');
 
 // Import Services
 const aiService = require('./services/aiService');
@@ -185,6 +186,54 @@ app.post('/api/analyze-url', async (req, res) => {
         }
         
         res.status(500).json({ error: 'Failed to analyze URL', details: errorMessage });
+    }
+});
+
+// Feedback API Route
+app.post('/api/feedback', async (req, res) => {
+    const { type, description, email } = req.body;
+    
+    if (!description) {
+        return res.status(400).json({ error: 'Feedback description is required' });
+    }
+
+    console.log(`[Feedback] Received: ${type} - ${email}`);
+
+    // Create transporter
+    const transporter = nodemailer.createTransport({
+        service: process.env.EMAIL_SERVICE || 'qq',
+        auth: {
+            user: process.env.EMAIL_USER,
+            pass: process.env.EMAIL_PASS
+        }
+    });
+
+    const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: 'QuennelKang@foxmail.com',
+        subject: `New Feedback Received: ${type}`,
+        text: `
+Type: ${type}
+From: ${email || 'Anonymous'}
+Time: ${new Date().toLocaleString()}
+
+Description:
+${description}
+        `
+    };
+
+    try {
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+            console.warn('[Feedback] Email credentials not configured. Logging only.');
+            return res.json({ success: true, message: 'Feedback received (Email not configured)' });
+        }
+
+        await transporter.sendMail(mailOptions);
+        console.log('[Feedback] Email sent successfully');
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[Feedback] Failed to send email:', error);
+        res.status(500).json({ error: 'Failed to send feedback email' });
     }
 });
 
